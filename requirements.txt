@@ -1,10 +1,11 @@
 # Core AI/ML Libraries
 torch>=2.0.0
 transformers>=4.30.0
-clip-by-openai>=1.0
+# Note: CLIP is included in transformers - use transformers.CLIPModel and CLIPProcessor
 
 # Midjourney API Integration
-ttapi>=1.0.0  # TTAPI SDK for Midjourney
+# Note: Using direct HTTP requests instead of ttapi SDK (Python 2 compatibility issues)
+# TTAPI documentation: https://ttapi.io/docs/apiReference/midjourney
 
 # NLP & Trend Analysis
 pytrends>=4.9.0
