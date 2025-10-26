@@ -1,0 +1,28 @@
+# API Configuration Template
+# Copy this file to config/api_keys.json and fill in your actual keys
+
+{
+  "ttapi": {
+    "api_key": "YOUR_TTAPI_API_KEY_HERE",
+    "base_url": "https://api.ttapi.io"
+  },
+  "gpt_api_free": {
+    "api_key": "YOUR_GPT_API_FREE_KEY_HERE",
+    "base_url": "https://api.chatanywhere.tech/v1"
+  },
+  "google_trends": {
+    "region": "HK",
+    "language": "zh-TW",
+    "timezone": 480
+  },
+  "clip": {
+    "model_name": "ViT-L/14",
+    "threshold_core": 0.75,
+    "threshold_style": 0.60
+  },
+  "midjourney": {
+    "version": "6.1",
+    "cref_weight": 100,
+    "default_params": "--ar 1:1 --style raw"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//private/tmp/proposal_extract/word/**)",
+      "Read(//tmp/**)",
+      "Read(//Volumes/Work/greewich/FYP/**)",
+      "Skill(document-skills:docx)",
+      "Bash(python3:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
