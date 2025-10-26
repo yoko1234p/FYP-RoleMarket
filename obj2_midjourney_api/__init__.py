@@ -11,4 +11,7 @@ This module handles:
 Target: Generate 28 character-consistent designs (~$10-30 total cost)
 """
 
+from .ttapi_client import TTAPIClient
+
+__all__ = ['TTAPIClient']
 __version__ = "1.0.0"
