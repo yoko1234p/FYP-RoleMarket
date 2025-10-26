@@ -1,0 +1,8 @@
+# Imgur URLs for Reference Images
+
+lulu_pig_ref_1.png: https://i.imgur.com/m0syInf.png
+  Delete hash: JsmyVadGfXsNjqT
+
+lulu_pig_ref_2.png: https://i.imgur.com/t7zZotG.png
+  Delete hash: DeMbwZQstrcWkvK
+
