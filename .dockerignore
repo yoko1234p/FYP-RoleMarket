@@ -1,0 +1,37 @@
+# Docker-specific ignores
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ipynb_checkpoints
+
+# Keep git history out of containers
+.git
+.gitignore
+
+# Environment files (use docker-compose env_file instead)
+.env
+
+# Development tools
+.vscode
+.idea
+.DS_Store
+
+# Documentation (not needed in runtime image)
+docs/
+*.md
+
+# Test files (not needed in runtime image)
+tests/
+
+# Large data files (mount as volumes instead)
+data/generated_images/*
+data/cache/*
+data/trends/*
+
+# Keep only reference images in build
+!data/reference_images
+
+# Build artifacts
+*.egg-info
+dist/
+build/
