@@ -5,7 +5,9 @@
       "Read(//tmp/**)",
       "Read(//Volumes/Work/greewich/FYP/**)",
       "Skill(document-skills:docx)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git commit:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
