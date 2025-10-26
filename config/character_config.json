@@ -1,0 +1,38 @@
+{
+  "character": {
+    "name": "Lulu豬",
+    "name_en": "Lulu Pig",
+    "company": "ToyzeroPlus",
+    "description": "ToyzeroPlus 旗下角色 IP，粉紅色小豬造型",
+    "reference_images": [
+      "data/reference_images/lulu_pig_ref_1.png",
+      "data/reference_images/lulu_pig_ref_2.png"
+    ],
+    "clip_similarity": 0.7813,
+    "reference_urls": []
+  },
+  "themes": [
+    "Halloween",
+    "Christmas",
+    "Spring Festival",
+    "Valentine's Day",
+    "Mid-Autumn Festival",
+    "Dragon Boat Festival",
+    "Summer"
+  ],
+  "midjourney": {
+    "version": "6.1",
+    "cref_weight": 100,
+    "base_params": "--ar 1:1 --style raw",
+    "character_description": "可愛粉紅色小豬 Lulu，ToyzeroPlus 品牌吉祥物"
+  },
+  "clip_thresholds": {
+    "core_feature": 0.75,
+    "style": 0.60
+  },
+  "budget": {
+    "ttapi_quota_usd": 30,
+    "estimated_images": 40,
+    "cost_per_image_usd": 0.40
+  }
+}
