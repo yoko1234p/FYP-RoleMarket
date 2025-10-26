@@ -12,6 +12,7 @@ Target: Generate 28 character-consistent designs (~$10-30 total cost)
 """
 
 from .ttapi_client import TTAPIClient
+from .clip_validator import CLIPValidator
 
-__all__ = ['TTAPIClient']
+__all__ = ['TTAPIClient', 'CLIPValidator']
 __version__ = "1.0.0"
