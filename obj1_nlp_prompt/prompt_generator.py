@@ -43,6 +43,7 @@ class PromptGenerator:
         self,
         api_key: str = None,
         base_url: str = None,
+        model: str = None,
         template_path: str = 'obj1_nlp_prompt/templates/prompt_template.txt',
         character_desc_path: str = 'data/character_descriptions/lulu_pig.txt'
     ):
@@ -52,6 +53,7 @@ class PromptGenerator:
         Args:
             api_key: GPT_API_free API key (defaults to env variable)
             base_url: API base URL (defaults to env variable)
+            model: Model name (defaults to env variable GPT_API_FREE_MODEL)
             template_path: Path to prompt template file
             character_desc_path: Path to character description file
         """
@@ -59,6 +61,7 @@ class PromptGenerator:
 
         self.api_key = api_key or os.getenv('GPT_API_FREE_KEY')
         self.base_url = base_url or os.getenv('GPT_API_FREE_BASE_URL')
+        self.model = model or os.getenv('GPT_API_FREE_MODEL', 'gpt-3.5-turbo')
 
         if not self.api_key:
             raise ValueError("GPT_API_FREE_KEY not found in environment")
@@ -66,7 +69,7 @@ class PromptGenerator:
         # Initialize OpenAI client
         self.client = OpenAI(
             api_key=self.api_key,
-            base_url=self.base_url
+            base_url=self.base_url,
         )
 
         # Load template
@@ -74,7 +77,7 @@ class PromptGenerator:
         # Load character description
         self.character_desc = self._load_character_description(character_desc_path)
 
-        logger.info("PromptGenerator initialized successfully")
+        logger.info(f"PromptGenerator initialized successfully (model: {self.model})")
 
     def _load_template(self, template_path: str) -> str:
         """Load prompt template from file."""
@@ -132,7 +135,7 @@ class PromptGenerator:
             start_time = time.time()
 
             response = self.client.chat.completions.create(
-                model='gpt-3.5-turbo',
+                model=self.model,
                 messages=[
                     {
                         'role': 'system',
