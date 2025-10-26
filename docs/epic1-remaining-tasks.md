@@ -61,7 +61,7 @@
 
    # 添加：
    GPT_API_FREE_KEY=你嘅_ACCESS_TOKEN
-   GPT_API_FREE_BASE_URL=https://api.chatanywhere.tech/v1
+   GPT_API_FREE_BASE_URL=https://api.chatanywhere.org/v1
    ```
 
 3. **驗證 API 連接**

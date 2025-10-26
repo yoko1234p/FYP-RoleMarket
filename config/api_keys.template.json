@@ -8,7 +8,7 @@
   },
   "gpt_api_free": {
     "api_key": "YOUR_GPT_API_FREE_KEY_HERE",
-    "base_url": "https://api.chatanywhere.tech/v1"
+    "base_url": "https://api.chatanywhere.org/v1"
   },
   "google_trends": {
     "region": "HK",

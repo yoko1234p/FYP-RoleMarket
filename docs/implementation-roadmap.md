@@ -153,7 +153,7 @@
    ```python
    import openai
 
-   openai.api_base = "https://api.chatanywhere.tech/v1"
+   openai.api_base = "https://api.chatanywhere.org/v1"
    openai.api_key = "YOUR_API_KEY"
 
    # 測試呼叫
