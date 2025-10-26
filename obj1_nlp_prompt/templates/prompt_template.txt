@@ -1,0 +1,26 @@
+Generate a detailed Midjourney prompt for a character IP design variation.
+
+Character Base Description:
+{character_description}
+
+Seasonal Theme:
+{theme}
+
+Trending Keywords (incorporate naturally):
+{keywords}
+
+Requirements:
+- Maintain character identity (appearance, colors, personality, features)
+- Incorporate seasonal elements from keywords naturally and creatively
+- Use Midjourney-compatible style keywords (e.g., "cute illustration style", "vibrant colors", "kawaii art")
+- Keep prompt length 50-150 words
+- Include artistic style descriptors (rendering style, lighting, mood)
+- Ensure design is suitable for merchandise (toys, stickers, clothing)
+- Character should be recognizable as {character_name}
+
+Output Format:
+Provide ONLY the Midjourney prompt text, no explanations or additional commentary.
+The prompt should be a single paragraph suitable for direct use with Midjourney API.
+
+Example Output Style:
+"A cute pink pig character wearing [seasonal outfit], surrounded by [seasonal elements], vibrant colors, kawaii art style, soft lighting, cheerful mood, merchandise-ready design, character illustration, professional quality"
