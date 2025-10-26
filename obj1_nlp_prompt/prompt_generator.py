@@ -157,7 +157,18 @@ class PromptGenerator:
             return prompt
 
         except Exception as e:
-            logger.error(f"Error generating prompt for {theme}: {e}")
+            # Parse and display API error details
+            error_msg = self._parse_api_error(e)
+            logger.error(f"❌ Error generating prompt for {theme}: {error_msg}")
+
+            # Check if it's a quota/limit error
+            if self._is_quota_error(e):
+                logger.error("⚠️  API quota/usage limit reached!")
+                logger.error("   Please check your API credits or wait for quota reset.")
+                raise  # Re-raise to stop execution
+
+            # For other errors, use fallback
+            logger.warning(f"Using fallback prompt for {theme}")
             return self._fallback_prompt(theme, keywords)
 
     def generate_variations(
@@ -324,6 +335,103 @@ class PromptGenerator:
                 return False, f"Missing theme reference: {theme}"
 
         return True, "Valid"
+
+    def _parse_api_error(self, exception: Exception) -> str:
+        """
+        Parse API error and extract useful information.
+
+        Args:
+            exception: Exception from API call
+
+        Returns:
+            Formatted error message string
+
+        Example error response body from GPT_API_free:
+        {
+            "error": {
+                "message": "Error details...",
+                "type": "chatanywhere_error",
+                "param": null,
+                "code": "400 BAD_REQUEST"
+            }
+        }
+        """
+        # Try to extract error details from OpenAI exception
+        try:
+            # Check if it's an OpenAI API error
+            if hasattr(exception, 'response'):
+                response_json = exception.response.json()
+                if 'error' in response_json:
+                    error_obj = response_json['error']
+                    message = error_obj.get('message', str(exception))
+                    error_type = error_obj.get('type', 'unknown')
+                    error_code = error_obj.get('code', 'unknown')
+
+                    return f"[{error_type}] {error_code}: {message}"
+
+            # Check if it's a standard exception with body attribute
+            if hasattr(exception, 'body') and isinstance(exception.body, dict):
+                error_obj = exception.body.get('error', {})
+                message = error_obj.get('message', str(exception))
+                error_type = error_obj.get('type', 'unknown')
+                error_code = error_obj.get('code', 'unknown')
+
+                return f"[{error_type}] {error_code}: {message}"
+
+            # Fallback: return exception string
+            return str(exception)
+
+        except Exception:
+            # If parsing fails, return original exception string
+            return str(exception)
+
+    def _is_quota_error(self, exception: Exception) -> bool:
+        """
+        Check if error is related to API quota/usage limit.
+
+        Args:
+            exception: Exception from API call
+
+        Returns:
+            True if quota/limit error, False otherwise
+        """
+        error_str = str(exception).lower()
+
+        # Common quota/limit error keywords
+        quota_keywords = [
+            'quota',
+            'rate limit',
+            'usage limit',
+            'insufficient',
+            'exceeded',
+            'too many requests',
+            '429',
+            'billing',
+            'credit'
+        ]
+
+        # Check exception message
+        for keyword in quota_keywords:
+            if keyword in error_str:
+                return True
+
+        # Check error code from response
+        try:
+            if hasattr(exception, 'response'):
+                response_json = exception.response.json()
+                error_code = response_json.get('error', {}).get('code', '')
+                if '429' in str(error_code) or 'quota' in str(error_code).lower():
+                    return True
+
+            if hasattr(exception, 'body') and isinstance(exception.body, dict):
+                error_code = exception.body.get('error', {}).get('code', '')
+                if '429' in str(error_code) or 'quota' in str(error_code).lower():
+                    return True
+
+        except Exception:
+            pass
+
+        return False
 
     def _fallback_prompt(self, theme: str, keywords: List[str]) -> str:
         """Generate fallback prompt if API fails."""
