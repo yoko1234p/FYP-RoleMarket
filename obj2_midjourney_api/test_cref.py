@@ -99,11 +99,10 @@ def test_cref_variations(dry_run=True):
     print("Testing --cref Weight Variations")
     print("="*80 + "\n")
 
-    # IMPORTANT: Replace these with actual public URLs
-    # After uploading reference images to Discord/hosting service
+    # Discord CDN URLs for Lulu Pig reference images (with query parameters)
     CREF_URLS = [
-        "https://cdn.discordapp.com/attachments/.../lulu_pig_ref_1.png",  # REPLACE
-        "https://cdn.discordapp.com/attachments/.../lulu_pig_ref_2.png"   # REPLACE
+        "https://cdn.discordapp.com/attachments/569198875265728545/1431958293630419134/lulu_pig_ref_1.png?ex=68ff4e95&is=68fdfd15&hm=fe678efd2397311cdf5e06da2e2a86fe60399cc39b2c3ba03c2f6160664f42a7&",
+        "https://cdn.discordapp.com/attachments/569198875265728545/1431958294578073730/lulu_pig_ref_2.png?ex=68ff4e95&is=68fdfd15&hm=3c7cb6b68e03c10b1d2f0660f4742bde91cd14161791b146c618defb358d3810&"
     ]
 
     # Check if URLs are placeholder
