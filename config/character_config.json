@@ -34,5 +34,66 @@
     "ttapi_quota_usd": 30,
     "estimated_images": 40,
     "cost_per_image_usd": 0.40
+  },
+  "categories": {
+    "simple_modifiers": {
+      "2D Animation": {
+        "suffix": ", 2D animation style, cartoon aesthetic, vibrant colors, animation-ready, cel-shaded",
+        "requires_input": false
+      },
+      "3D Animation": {
+        "suffix": ", 3D animation style, Pixar-quality render, soft lighting, character rig-ready, high-poly model",
+        "requires_input": false
+      },
+      "Comic": {
+        "suffix": ", comic book style, manga aesthetic, bold outlines, halftone effects, panel layout-ready",
+        "requires_input": false
+      },
+      "Single Visual": {
+        "suffix": ", single visual illustration, poster design, hero shot, high-resolution artwork, print-ready",
+        "requires_input": false
+      },
+      "Sticker": {
+        "suffix": ", sticker design, LINE/Telegram style, transparent background, die-cut ready, expressive pose",
+        "requires_input": false
+      }
+    },
+    "complex_modifiers": {
+      "Product": {
+        "template": ", {product_type} product design, merchandise-ready, 3D product render, commercial quality, realistic materials",
+        "requires_input": true,
+        "input_prompt": "請輸入產品類型（例如：plush toy 玩具公仔, T-shirt T恤, mug 馬克杯, keychain 鑰匙扣）",
+        "placeholder": "plush toy",
+        "examples": ["plush toy 玩具公仔", "T-shirt T恤", "mug 馬克杯", "keychain 鑰匙扣", "tote bag 帆布袋", "phone case 手機殼"]
+      },
+      "Collaboration": {
+        "template": ", collaboration design with {brand_name}, crossover style, brand integration, co-branding elements, limited edition aesthetic",
+        "requires_input": true,
+        "input_prompt": "請輸入聯乘品牌/IP（例如：Sanrio, Disney, LINE Friends）",
+        "placeholder": "Sanrio",
+        "examples": ["Sanrio", "Disney", "LINE Friends", "Pokémon", "Hello Kitty", "Minions"]
+      },
+      "LuLu World": {
+        "template": ", LuLu World theme park scene, {scene_description}, immersive environment, theme park aesthetic, family-friendly atmosphere",
+        "requires_input": true,
+        "input_prompt": "請輸入場景描述（例如：entrance gate 入口大閘, candy land 糖果樂園, water ride 水上設施）",
+        "placeholder": "entrance gate",
+        "examples": ["entrance gate 入口大閘", "candy land 糖果樂園", "roller coaster 過山車", "gift shop 禮品店", "parade float 巡遊花車"]
+      },
+      "PR/Seeding": {
+        "template": ", PR campaign visual, {campaign_focus}, social media optimized, influencer-friendly, shareable content, brand storytelling",
+        "requires_input": true,
+        "input_prompt": "請輸入公關重點（例如：new product launch 新品發布, charity event 慈善活動, brand awareness 品牌宣傳）",
+        "placeholder": "new product launch",
+        "examples": ["new product launch 新品發布", "charity event 慈善活動", "brand awareness 品牌宣傳", "influencer collaboration 網紅合作"]
+      },
+      "Campaign": {
+        "template": ", marketing campaign design, {campaign_theme}, promotional material, call-to-action visual, campaign identity, multi-platform ready",
+        "requires_input": true,
+        "input_prompt": "請輸入活動主題（例如：summer sale 夏日優惠, back to school 開學季, anniversary celebration 週年慶）",
+        "placeholder": "summer sale",
+        "examples": ["summer sale 夏日優惠", "back to school 開學季", "anniversary celebration 週年慶", "limited edition drop 限量發售", "flash sale 限時搶購"]
+      }
+    }
   }
 }
