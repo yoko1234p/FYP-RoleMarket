@@ -45,7 +45,43 @@ logger = logging.getLogger(__name__)
 KAGGLE_MODE = Path('/kaggle/input').exists()
 
 if KAGGLE_MODE:
-    INPUT_DIR = Path('/kaggle/input/lulu-rolemarket-sales-data')  # Kaggle Dataset 路徑
+    # 自動尋找 Kaggle Dataset
+    kaggle_input = Path('/kaggle/input')
+    possible_names = [
+        'lulu-pig-rolemarket-sales-data',
+        'lulu-rolemarket-sales-data',
+        'lulu-production-sales',
+    ]
+
+    INPUT_DIR = None
+    for name in possible_names:
+        path = kaggle_input / name
+        if path.exists():
+            INPUT_DIR = path
+            logger.info(f"Found Kaggle Dataset at: {INPUT_DIR}")
+            break
+
+    if INPUT_DIR is None:
+        # 列出所有可用的 datasets
+        available_datasets = list(kaggle_input.iterdir()) if kaggle_input.exists() else []
+        logger.error("=" * 80)
+        logger.error("❌ Kaggle Dataset not found!")
+        logger.error("=" * 80)
+        logger.error("Tried the following paths:")
+        for name in possible_names:
+            logger.error(f"  - /kaggle/input/{name}")
+        logger.error("")
+        logger.error("Available datasets in /kaggle/input/:")
+        for ds in available_datasets:
+            logger.error(f"  ✓ {ds.name}")
+        logger.error("")
+        logger.error("Please:")
+        logger.error("  1. Click 'Add Data' on the right panel")
+        logger.error("  2. Search for your Lulu dataset")
+        logger.error("  3. Click 'Add' to attach it to this notebook")
+        logger.error("=" * 80)
+        raise FileNotFoundError("Kaggle Dataset not found. Please add the dataset to this notebook.")
+
     OUTPUT_DIR = Path('/kaggle/working')
     logger.info("Running in KAGGLE environment")
 else:
