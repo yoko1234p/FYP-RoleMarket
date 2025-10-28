@@ -208,6 +208,9 @@ def load_and_preprocess_data():
     df = pd.read_csv(csv_path, encoding='utf-8-sig')
     logger.info(f"  Loaded {len(df)} records from CSV")
 
+    # 清理 design_id 欄位（移除可能的 BOM 或空白）
+    df['design_id'] = df['design_id'].str.strip()
+
     # 2. 讀取 CLIP embeddings
     clip_path = INPUT_DIR / "clip_embeddings.npy"
     clip_embeddings = np.load(clip_path)
@@ -224,9 +227,27 @@ def load_and_preprocess_data():
 
     # 構建時序特徵 (Google Trends 歷史)
     ts_data = []
-    for design_id in df['design_id']:
+    for idx, design_id in enumerate(df['design_id']):
+        if design_id not in trends_history:
+            logger.error(f"  ❌ design_id not found in trends_history: '{design_id}'")
+            logger.error(f"     Row {idx}, First 50 chars: {design_id[:50]}")
+            logger.error(f"     Available keys sample: {list(trends_history.keys())[:3]}")
+            raise KeyError(f"design_id '{design_id}' not found in trends_history.json")
+
         trends = trends_history[design_id]
+
+        # 確保 trends 是 list 而不是其他類型
+        if not isinstance(trends, list):
+            logger.error(f"  ❌ trends for '{design_id}' is not a list: {type(trends)}")
+            logger.error(f"     Value: {trends}")
+            raise TypeError(f"Expected list, got {type(trends)} for design_id '{design_id}'")
+
+        if len(trends) != 4:
+            logger.error(f"  ❌ trends for '{design_id}' has wrong length: {len(trends)} (expected 4)")
+            raise ValueError(f"Expected 4 trend values, got {len(trends)} for design_id '{design_id}'")
+
         ts_data.append(trends)
+
     ts_data = np.array(ts_data, dtype=np.float32)  # (N, 4)
     ts_data = ts_data.reshape(-1, 4, 1)  # (N, seq_length, 1)
     logger.info(f"  Time-series shape: {ts_data.shape}")

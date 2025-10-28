@@ -230,7 +230,42 @@ plt.show()
 
 ## 🔧 故障排除
 
-### 問題 1: 找不到數據檔案
+### 問題 1: TypeError - float() argument must be a string or a real number, not 'dict'
+
+**錯誤訊息**:
+```python
+TypeError: float() argument must be a string or a real number, not 'dict'
+```
+
+**原因**: `trends_history.json` 數據格式不正確或讀取錯誤
+
+**解決方法**:
+1. **檢查數據檔案是否完整上傳**
+   - 確認 3 個檔案都已上傳：`historical_data.csv`, `clip_embeddings.npy`, `trends_history.json`
+   - 檢查檔案大小是否正確（trends_history.json 應該 > 500KB）
+
+2. **使用更新版本的訓練腳本**
+   - 確保使用最新的 `kaggle_train_lulu_transformer.py`（包含錯誤檢查）
+   - 腳本會自動清理 design_id 並檢查數據格式
+
+3. **手動驗證數據格式**
+   ```python
+   import json
+   with open('/kaggle/input/lulu-pig-rolemarket-sales-data/trends_history.json', 'r') as f:
+       trends = json.load(f)
+
+   # 檢查第一個 key
+   first_key = list(trends.keys())[0]
+   print(f"Key: {first_key}")
+   print(f"Value type: {type(trends[first_key])}")
+   print(f"Value: {trends[first_key]}")
+
+   # 應該輸出：
+   # Value type: <class 'list'>
+   # Value: [105.94, 87.66, 94.00, 78.91]
+   ```
+
+### 問題 2: 找不到數據檔案
 
 **錯誤訊息**:
 ```
