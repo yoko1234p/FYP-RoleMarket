@@ -1,0 +1,9 @@
+{
+  "model_name": "HybridTransformer",
+  "dataset": "Lulu Pig Production Sales (1075 records)",
+  "total_params": 270721,
+  "training_time": 4.384745836257935,
+  "mae": 549.6923217773438,
+  "rmse": 715.3208851627359,
+  "r2": 0.21107906103134155
+}

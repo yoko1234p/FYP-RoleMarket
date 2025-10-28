@@ -103,20 +103,22 @@ else:
 
 
 # ============================================================
-# Hyperparameters
+# Hyperparameters - Optimized Version (Experiment #1)
 # ============================================================
-BATCH_SIZE = 32
+# 方案 A: 降低模型複雜度，減少過擬合
+BATCH_SIZE = 64          # 從 32 → 64 (更大 batch，更穩定訓練)
 EPOCHS = 50
-LEARNING_RATE = 0.001
-PATIENCE = 15  # Early stopping patience
-SEQ_LENGTH = 4  # Google Trends 歷史長度
-TS_INPUT_DIM = 1  # 每個時間步的特徵數（trend_score）
-STATIC_INPUT_DIM = 772  # 4 (其他 trend 特徵) + 768 (CLIP embeddings)
-D_MODEL = 64
+LEARNING_RATE = 0.0005   # 從 0.001 → 0.0005 (更保守學習)
+PATIENCE = 15
+SEQ_LENGTH = 4
+TS_INPUT_DIM = 1
+# 方案 B: 加入產品類型 one-hot encoding (9 種產品)
+STATIC_INPUT_DIM = 781   # 4 (trend) + 768 (CLIP) + 9 (product_type one-hot)
+D_MODEL = 32             # 從 64 → 32 (減少參數)
 NHEAD = 4
-NUM_LAYERS = 2
-DIM_FEEDFORWARD = 128
-DROPOUT = 0.1
+NUM_LAYERS = 1           # 從 2 → 1 (簡化架構)
+DIM_FEEDFORWARD = 64     # 從 128 → 64 (減少參數)
+DROPOUT = 0.3            # 從 0.1 → 0.3 (增強正則化)
 
 
 # ============================================================
@@ -289,12 +291,25 @@ def load_and_preprocess_data():
     logger.info(f"  Time-series shape: {ts_data.shape}")
 
     # 構建靜態特徵
-    # trend_momentum, trend_volatility, trend_score_current, trend_score_q4
+    # 1. Trend 特徵 (4 維)
     trend_features = df[[
         'trend_momentum', 'trend_volatility', 'trend_score_current', 'trend_score_q4'
     ]].values.astype(np.float32)
 
-    static_features = np.concatenate([trend_features, clip_embeddings], axis=1)  # (N, 4 + 768)
+    # 2. 產品類型 One-Hot Encoding (9 維) - 方案 B
+    product_type_dummies = pd.get_dummies(df['product_type'], prefix='product', dtype=np.float32)
+    logger.info(f"  Product types: {product_type_dummies.shape[1]} types")
+    logger.info(f"    Types: {', '.join(product_type_dummies.columns)}")
+
+    # 3. CLIP Embeddings (768 維)
+    # 已在前面載入
+
+    # 合併所有靜態特徵: trend (4) + product_type (9) + CLIP (768) = 781
+    static_features = np.concatenate([
+        trend_features,
+        product_type_dummies.values,
+        clip_embeddings
+    ], axis=1)
     logger.info(f"  Static features shape: {static_features.shape}")
 
     # 目標變數
