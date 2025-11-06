@@ -52,7 +52,7 @@ CLIP_SIMILARITY_THRESHOLD = 0.80
 REFERENCE_IMAGES_DIR = PROJECT_ROOT / "data" / "reference_images"
 
 # Obj 3 - Forecasting
-MODEL_WEIGHTS_PATH = PROJECT_ROOT / "models" / "transformer_lulu" / "best_model.pth"
+MODEL_WEIGHTS_PATH = PROJECT_ROOT / "models" / "transformer_lulu" / "best_transformer_model.pth"
 TRANSFORMER_D_MODEL = 64
 TRANSFORMER_NUM_LAYERS = 2
 TRANSFORMER_NHEAD = 8
