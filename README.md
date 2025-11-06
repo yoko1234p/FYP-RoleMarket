@@ -20,7 +20,7 @@
   - ✅ **生產就緒** - Exp #11v2 最終方案
 - **Objective 4:** Streamlit 統一 Web 介面 - ⏳ **開發中**
   - ✅ **Story 4.1 完成** - Streamlit 基礎架構 + Obj 1 整合
-  - ⏳ **Story 4.2 待進行** - Obj 2 圖片生成整合
+  - ✅ **Story 4.2 完成** - Obj 2 圖片生成與 CLIP 驗證整合
   - ⏳ **Story 4.3 待進行** - Obj 3 銷量預測儀表板
 
 ### 最新改進（v1.3 - 2025-10-29）

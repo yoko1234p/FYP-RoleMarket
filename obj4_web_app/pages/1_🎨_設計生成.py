@@ -17,11 +17,14 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 from obj4_web_app.utils.trends_api import TrendsAPIWrapper, PromptGenerationError
+from obj4_web_app.utils.design_generator import DesignGeneratorWrapper, DesignGenerationError
 from obj4_web_app.config import (
     DEFAULT_REGION,
     DEFAULT_LANG,
     ERROR_MESSAGES,
-    SUCCESS_MESSAGES
+    SUCCESS_MESSAGES,
+    CLIP_SIMILARITY_THRESHOLD,
+    REFERENCE_IMAGES_DIR
 )
 
 # Page configuration
@@ -46,6 +49,12 @@ if 'last_keywords' not in st.session_state:
 if 'last_character_name' not in st.session_state:
     st.session_state['last_character_name'] = ""
 
+if 'generated_images' not in st.session_state:
+    st.session_state['generated_images'] = []
+
+if 'clip_embeddings' not in st.session_state:
+    st.session_state['clip_embeddings'] = []
+
 
 # Initialize API wrapper (cached)
 @st.cache_resource
@@ -59,8 +68,25 @@ def load_trends_api():
     return TrendsAPIWrapper(region=DEFAULT_REGION, lang=DEFAULT_LANG)
 
 
+@st.cache_resource
+def load_design_generator():
+    """
+    載入 DesignGeneratorWrapper（cached across sessions）。
+
+    Returns:
+        DesignGeneratorWrapper instance
+    """
+    try:
+        return DesignGeneratorWrapper()
+    except Exception as e:
+        st.warning(f"⚠️ Design Generator 初始化失敗：{str(e)}")
+        st.info("圖片生成功能將不可用。請檢查 GOOGLE_API_KEY 環境變數。")
+        return None
+
+
 try:
     api_wrapper = load_trends_api()
+    design_generator = load_design_generator()
 except Exception as e:
     st.error(f"❌ 系統初始化失敗：{str(e)}")
     st.stop()
@@ -173,17 +199,188 @@ with col2:
         st.info("👆 請在左側輸入資訊並點擊「生成 Prompt」按鈕")
 
 
+# Image Generation Section
+st.markdown("---")
+st.header("🎨 圖片生成 (Obj 2)")
+
+if st.session_state['generated_prompt'] and design_generator:
+    st.markdown("### 設定")
+
+    # Reference Image selector
+    available_refs = list(REFERENCE_IMAGES_DIR.glob("lulu_pig_ref_*.png")) + \
+                     list(REFERENCE_IMAGES_DIR.glob("lulu_pig_ref_*.jpg"))
+
+    if not available_refs:
+        st.warning("⚠️ 未找到 Reference Images，請檢查 data/reference_images/ 目錄")
+    else:
+        # Display reference images for selection
+        ref_names = [ref.name for ref in available_refs]
+        selected_ref_name = st.selectbox(
+            "選擇 Reference Image",
+            options=ref_names,
+            help="選擇角色參考圖，用於保持角色一致性"
+        )
+
+        selected_ref_path = REFERENCE_IMAGES_DIR / selected_ref_name
+
+        # Show selected reference image
+        with st.expander("📷 查看 Reference Image"):
+            st.image(str(selected_ref_path), caption=selected_ref_name, width=300)
+
+        # Generation parameters
+        with st.expander("⚙️ 生成參數"):
+            num_images = st.slider(
+                "生成數量",
+                min_value=1,
+                max_value=4,
+                value=4,
+                help="選擇要生成的設計圖數量 (1-4 張)"
+            )
+
+        # Generate Images button
+        generate_images_button = st.button(
+            f"🎨 生成 {num_images} 張設計圖",
+            type="primary",
+            use_container_width=True,
+            disabled=(design_generator is None)
+        )
+
+        if generate_images_button:
+            st.markdown("### 生成中...")
+
+            # Progress tracking
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+
+            def update_progress(progress: float, message: str):
+                """更新進度條和狀態文字"""
+                progress_bar.progress(progress)
+                status_text.text(message)
+
+            # Generate designs
+            try:
+                results = design_generator.generate_designs(
+                    prompt=st.session_state['generated_prompt'],
+                    reference_image_path=str(selected_ref_path),
+                    num_images=num_images,
+                    progress_callback=update_progress,
+                    max_retries=3
+                )
+
+                # Save to session state
+                st.session_state['generated_images'] = results
+
+                # Clear progress
+                progress_bar.empty()
+                status_text.empty()
+
+                # Success summary
+                successful_count = sum(1 for r in results if r.get('success'))
+                if successful_count == num_images:
+                    st.success(f"✅ 成功生成 {successful_count}/{num_images} 張設計圖！")
+                elif successful_count > 0:
+                    st.warning(f"⚠️ 生成完成：{successful_count}/{num_images} 張成功")
+                else:
+                    st.error(f"❌ 全部生成失敗，請稍後重試")
+
+            except DesignGenerationError as e:
+                progress_bar.empty()
+                status_text.empty()
+                st.error(f"❌ 圖片生成失敗：{str(e)}")
+            except Exception as e:
+                progress_bar.empty()
+                status_text.empty()
+                st.error(f"❌ 發生錯誤：{str(e)}")
+
+        # Display generated images
+        if st.session_state['generated_images']:
+            st.markdown("### 生成結果")
+
+            results = st.session_state['generated_images']
+            successful_results = [r for r in results if r.get('success')]
+
+            if successful_results:
+                # Calculate average similarity
+                avg_similarity = design_generator.get_average_similarity(results)
+                st.metric(
+                    label="平均 CLIP 相似度",
+                    value=f"{avg_similarity:.4f}",
+                    delta="✅ 達標" if avg_similarity >= CLIP_SIMILARITY_THRESHOLD else "⚠️ 低於門檻"
+                )
+
+                # Display images in 2x2 grid
+                cols = st.columns(2)
+                for i, result in enumerate(results):
+                    col = cols[i % 2]
+
+                    with col:
+                        if result.get('success'):
+                            # Display image
+                            st.image(
+                                result['image'],
+                                caption=f"變化 {i+1}",
+                                use_container_width=True
+                            )
+
+                            # CLIP similarity
+                            similarity = result.get('clip_similarity', 0.0)
+                            if similarity >= CLIP_SIMILARITY_THRESHOLD:
+                                st.markdown(f"**CLIP 相似度:** :green[{similarity:.4f}] ✅")
+                            else:
+                                st.markdown(f"**CLIP 相似度:** :orange[{similarity:.4f}] ⚠️")
+
+                            # Generation time
+                            gen_time = result.get('generation_time', 0.0)
+                            st.caption(f"生成時間：{gen_time:.2f}s")
+
+                            # Download button
+                            img_bytes = design_generator.image_to_bytes(result['image'])
+                            st.download_button(
+                                label="📥 下載",
+                                data=img_bytes,
+                                file_name=f"design_{i+1}.png",
+                                mime="image/png",
+                                key=f"download_{i}"
+                            )
+
+                        else:
+                            # Display error
+                            st.error(f"變化 {i+1} 生成失敗")
+                            st.caption(f"錯誤：{result.get('error', '未知錯誤')}")
+
+                        st.markdown("---")
+
+            else:
+                st.warning("⚠️ 所有圖片生成失敗，請檢查 API 配置或稍後重試")
+
+elif not st.session_state['generated_prompt']:
+    st.info("👆 請先在上方生成 Prompt")
+elif not design_generator:
+    st.warning("⚠️ Design Generator 未初始化，圖片生成功能不可用")
+
+
 # Footer
 st.markdown("---")
 st.markdown("""
 ### 💡 使用說明
+
+**步驟 1: 生成 Prompt**
 1. **輸入角色資訊**：填寫角色名稱和描述
 2. **輸入趨勢關鍵字**：填寫與市場趨勢相關的關鍵字（逗號分隔）
 3. **生成 Prompt**：點擊按鈕生成 AI 設計 Prompt
 4. **複製結果**：使用「複製 Prompt」按鈕保存結果
 
+**步驟 2: 生成設計圖 (可選)**
+1. **選擇 Reference Image**：選擇角色參考圖（用於保持一致性）
+2. **設定生成數量**：選擇要生成的圖片數量 (1-4 張)
+3. **生成設計圖**：點擊「生成設計圖」按鈕
+4. **查看結果**：檢查 CLIP 相似度分數（≥ 0.80 為達標）
+5. **下載圖片**：使用「下載」按鈕保存圖片
+
 **注意事項：**
 - 關鍵字建議 3-10 個為佳
 - 描述盡量簡短明確
 - 系統會自動重試失敗的請求（最多 3 次）
+- 圖片生成需要 GOOGLE_API_KEY（每張約 11 秒）
+- CLIP 相似度 ≥ 0.80 表示角色一致性良好
 """)
