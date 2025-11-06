@@ -4,26 +4,33 @@
 
 **總時長：** 17-18 天（2.5 週）
 
-**最後更新：** 2025-01-25
+**最後更新：** 2025-11-06
 
 ---
 
 ## 📋 總覽
 
 ### 時間分配
-- **Obj 1 (NLP Prompt):** Day 1-3 (3 天)
-- **Obj 2 (Midjourney API Integration):** Day 4-5 (2 天) - **節省 2 天!**
-- **Obj 3 (LSTM Forecast):** Day 6-9 (4 天)
-- **Obj 4 (Web Integration):** Day 10-12 (3 天)
-- **Testing & Documentation:** Day 13-15 (3 天)
-- **Buffer & Polish:** Day 16-18 (3 天)
+- **Obj 1 (NLP Prompt):** Day 1-3 (3 天) - ✅ **完成**
+- **Obj 2 (Midjourney API Integration):** Day 4-5 (2 天) - ✅ **完成（節省 2 天!）**
+- **Obj 3 (Transformer Forecast):** Day 6-15 (10 天) - ✅ **完成（Exp #11v2: R² = 0.6788）**
+- **Obj 4 (Web Integration):** Day 10-18 (9 天) - ✅ **完成（2025-11-06）**
+  - ✅ Story 4.1: Streamlit 基礎 + Obj 1 整合
+  - ✅ Story 4.2: Obj 2 圖片生成整合
+  - ✅ Story 4.3: Obj 3 銷量預測整合
+  - ✅ Enhancement: Google Trends 自動提取
+- **Testing & Documentation:** Day 13-15 (3 天) - 🔄 **進行中**
+- **Bug Fixes & Polish:** Day 16-18 (3 天) - ⏳ **待進行**
+- **Deployment:** Day 19-20 (2 天) - ⏳ **待進行**
 
 ### 關鍵里程碑
 - ✅ **M1 (Day 3):** NLP 流程可生成有效 Midjourney prompts
 - ✅ **M2 (Day 5):** Midjourney API 集成完成，28 張設計圖生成並提取 CLIP embeddings - **節省 2 天!**
-- ✅ **M3 (Day 9):** LSTM 模型可預測銷量
-- ✅ **M4 (Day 12):** 完整 Web App 可運行
-- ✅ **M5 (Day 15):** Demo 影片完成，文檔齊全
+- ✅ **M3 (Day 15):** 需求預測模型完成（Transformer R² = 0.6788）- **超越目標 (≥0.65)!**
+- ✅ **M4 (Day 18):** 完整 Web App 功能完成（Obj 1-3 整合）- **完成!**
+- 🔄 **M5 (Day 20):** 手動測試完成，bugs 修復
+- ⏳ **M6 (Day 22):** Streamlit Cloud 部署完成
+- ⏳ **M7 (Day 24):** Demo 影片完成，文檔齊全
 
 ---
 
@@ -489,7 +496,21 @@
 
 ---
 
-## 📊 Objective 3: LSTM 需求預測 (Day 6-9)
+## 📊 Objective 3: Transformer 需求預測 (Day 6-15) ✅ 完成
+
+**最終成果：** Hybrid Transformer Model (Exp #11v2) - R² = 0.6788, MAE = 327.26, RMSE = 456.40
+
+**關鍵發現：**
+- ✅ Transformer 架構優於傳統 LSTM（R² 0.6788 vs 基線 0.5127）
+- ✅ 達到企業級標準（R² ≥ 0.65）
+- ✅ Ensemble 和數據增強實驗證實單模型已達最佳平衡
+- ✅ 完整實驗記錄：[`docs/experiment-log-lulu-transformer.md`](experiment-log-lulu-transformer.md)
+
+**最終配置：**
+- Model: Hybrid Transformer (D_MODEL=64, NUM_LAYERS=2, NHEAD=8)
+- Training: 400 epochs (early stop at 155), PATIENCE=80
+- Dataset: Lulu Pig (1,075 records, original data)
+- Features: Time-series trends (4-quarter history) + CLIP embeddings (768-dim) + product type
 
 ### Day 6: 模擬銷售數據生成
 
@@ -571,9 +592,9 @@
 
 ---
 
-### Day 7: Hybrid LSTM 模型實作
+### Day 7-14: Hybrid Transformer 模型實作與優化
 
-**目標：** 實作結合 time-series 和 static features 的 LSTM 架構
+**目標：** 實作結合 time-series 和 static features 的 Transformer 架構（已完成）
 
 **任務：**
 1. **數據預處理 (2 hrs)**
@@ -749,12 +770,19 @@
 
 ---
 
-### Day 9: Feature Importance 分析與完成
+### Day 15: 實驗總結與最終方案確認
 
-**目標：** 分析模型學到什麼，生成市場洞察報告
+**目標：** 完成所有優化實驗並確定最終生產方案（已完成）
 
-**任務：**
-1. **Feature Importance 分析 (3 hrs)**
+**完成任務：**
+1. **14+ 次實驗迭代（詳見 `docs/experiment-log-lulu-transformer.md`）**
+   - Exp #3-9: 本地開發與優化（Grid Search: R² = 0.6313）
+   - Exp #10: Kaggle Baseline（R² = 0.5127，訓練不足）
+   - Exp #11v2: 延長訓練（R² = 0.6788）- ✅ **最終採用**
+   - Exp #12v3/v4: Ensemble 方案（R² = 0.9525，數據洩漏）
+   - Exp #14: 數據增強（R² = 0.9737，數據洩漏）
+
+2. **Feature Importance 分析（已完成）**
    ```python
    from captum.attr import IntegratedGradients
 
@@ -801,15 +829,19 @@
    - 給 Obj 4 的預測 API 準備
 
 **交付成果：**
-- ✅ `docs/insights/market-insights-report.md`
-- ✅ `src/obj3_lstm_forecast/predict_api.py` (預測 API)
-- ✅ `docs/experiment-logs/day11-feature-analysis.md`
+- ✅ `obj3_lstm_forecast/kaggle_train_lulu_exp11v2.py` (最終生產模型)
+- ✅ `obj3_lstm_forecast/generate_augmented_data.py` (數據增強探索腳本)
+- ✅ `obj3_lstm_forecast/kaggle_train_lulu_exp14.py` (數據增強訓練腳本)
+- ✅ `obj3_lstm_forecast/kaggle_train_lulu_exp12v3.py` (Ensemble 探索腳本)
+- ✅ `docs/experiment-log-lulu-transformer.md` (完整實驗記錄)
 - ✅ **Milestone M3 達成**
 
 **完成標準：**
-- Feature importance 分析完成並可視化
-- 市場洞察報告撰寫完畢
-- 預測 API 可被 Streamlit 呼叫
+- ✅ Hybrid Transformer 模型達到企業級標準（R² = 0.6788 ≥ 0.65）
+- ✅ 完成 Ensemble 和數據增強方案驗證（發現數據洩漏問題）
+- ✅ 確定最終生產方案：Exp #11v2 + 原始數據
+- ✅ 完整實驗記錄文檔撰寫完畢
+- ✅ 預測 API 可被 Streamlit 呼叫
 
 ---
 
@@ -1442,8 +1474,11 @@ streamlit run src/obj4_web_app/app.py
 
 ---
 
-**最後更新：** 2025-01-26
-**預計開始日期：** [填入實際開始日期]
-**預計完成日期：** [開始日期 + 15 天] - **節省 2 天!**
+**最後更新：** 2025-10-29
+**專案開始日期：** 2025-01-20
+**Objective 3 完成日期：** 2025-10-29
+
+**已完成 Objectives：** Obj 1 ✅, Obj 2 ✅, Obj 3 ✅
+**下一步：** Objective 4 (Web Integration)
 
 **祝你專案順利！加油！💪**
