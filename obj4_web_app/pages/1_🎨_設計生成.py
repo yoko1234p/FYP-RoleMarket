@@ -18,6 +18,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from obj4_web_app.utils.trends_api import TrendsAPIWrapper, PromptGenerationError
 from obj4_web_app.utils.design_generator import DesignGeneratorWrapper, DesignGenerationError
+from obj4_web_app.utils.trends_extractor_wrapper import TrendsExtractorWrapper, TrendsExtractionError
 from obj4_web_app.config import (
     DEFAULT_REGION,
     DEFAULT_LANG,
@@ -26,6 +27,8 @@ from obj4_web_app.config import (
     CLIP_SIMILARITY_THRESHOLD,
     REFERENCE_IMAGES_DIR
 )
+import plotly.graph_objects as go
+from datetime import datetime
 
 # Page configuration
 st.set_page_config(
@@ -55,8 +58,14 @@ if 'generated_images' not in st.session_state:
 if 'clip_embeddings' not in st.session_state:
     st.session_state['clip_embeddings'] = []
 
+if 'extracted_trends' not in st.session_state:
+    st.session_state['extracted_trends'] = []
 
-# Initialize API wrapper (cached)
+if 'selected_keywords' not in st.session_state:
+    st.session_state['selected_keywords'] = []
+
+
+# Initialize API wrappers (cached)
 @st.cache_resource
 def load_trends_api():
     """
@@ -66,6 +75,17 @@ def load_trends_api():
         TrendsAPIWrapper instance
     """
     return TrendsAPIWrapper(region=DEFAULT_REGION, lang=DEFAULT_LANG)
+
+
+@st.cache_resource
+def load_trends_extractor():
+    """
+    載入 TrendsExtractorWrapper（cached across sessions）。
+
+    Returns:
+        TrendsExtractorWrapper instance
+    """
+    return TrendsExtractorWrapper(region=DEFAULT_REGION, lang=DEFAULT_LANG)
 
 
 @st.cache_resource
@@ -86,6 +106,7 @@ def load_design_generator():
 
 try:
     api_wrapper = load_trends_api()
+    trends_extractor = load_trends_extractor()
     design_generator = load_design_generator()
 except Exception as e:
     st.error(f"❌ 系統初始化失敗：{str(e)}")
@@ -114,13 +135,156 @@ with col1:
 
     # Trend keywords
     st.subheader("2️⃣ 趨勢關鍵字")
-    keywords_input = st.text_input(
-        "關鍵字（逗號分隔）",
-        value="春節, 紅色, 喜慶, 燈籠",
-        help="輸入趨勢關鍵字，用逗號分隔，例如：春節, 紅色, 喜慶"
-    )
 
-    st.info("💡 提示：輸入與市場趨勢相關的關鍵字，系統會自動生成設計 Prompt")
+    # Tabs for manual input vs auto-extraction
+    tab1, tab2 = st.tabs(["🔍 自動提取 (Google Trends)", "✍️ 手動輸入"])
+
+    with tab1:
+        st.markdown("**從 Google Trends 自動提取熱門關鍵字**")
+
+        # Theme selector
+        all_themes = trends_extractor.get_all_themes()
+        theme_options = [t['display'] for t in all_themes]
+        theme_values = [t['value'] for t in all_themes]
+
+        # Get current month for suggestions
+        current_month = datetime.now().month
+        suggested_themes = trends_extractor.get_theme_suggestions(current_month)
+
+        # Show suggestions
+        if suggested_themes:
+            st.info(f"💡 本月推薦主題：{', '.join([trends_extractor.THEME_DISPLAY_NAMES[t] for t in suggested_themes])}")
+
+        selected_theme_display = st.selectbox(
+            "選擇主題",
+            options=theme_options,
+            help="選擇一個主題以提取相關熱門關鍵字"
+        )
+
+        # Get theme value
+        selected_theme_idx = theme_options.index(selected_theme_display)
+        selected_theme = theme_values[selected_theme_idx]
+
+        col_extract, col_top_n = st.columns([3, 1])
+
+        with col_extract:
+            extract_button = st.button(
+                "🔍 提取熱門關鍵字",
+                use_container_width=True,
+                type="secondary"
+            )
+
+        with col_top_n:
+            top_n = st.number_input(
+                "數量",
+                min_value=5,
+                max_value=20,
+                value=10,
+                step=1,
+                help="提取前 N 個熱門關鍵字"
+            )
+
+        # Extract trends
+        if extract_button:
+            with st.spinner(f"⏳ 正在從 Google Trends 提取 {selected_theme_display} 的熱門關鍵字..."):
+                try:
+                    keywords = trends_extractor.get_trending_keywords(
+                        theme=selected_theme,
+                        timeframe='today 12-m',
+                        top_n=top_n
+                    )
+
+                    if keywords:
+                        st.session_state['extracted_trends'] = keywords
+                        st.session_state['selected_keywords'] = []  # Reset selection
+                        st.success(f"✅ 成功提取 {len(keywords)} 個關鍵字！")
+                    else:
+                        st.warning("⚠️ 未找到相關趨勢數據，請嘗試其他主題")
+
+                except TrendsExtractionError as e:
+                    st.error(f"❌ 提取失敗：{str(e)}")
+                except Exception as e:
+                    st.error(f"❌ 發生錯誤：{str(e)}")
+
+        # Display extracted trends with checkboxes
+        if st.session_state['extracted_trends']:
+            st.markdown("---")
+            st.markdown(f"**提取結果（過去 12 個月）：**")
+
+            # Select all / deselect all buttons
+            col_select_all, col_deselect_all = st.columns(2)
+            with col_select_all:
+                if st.button("✅ 全選", use_container_width=True):
+                    st.session_state['selected_keywords'] = [
+                        kw['keyword'] for kw in st.session_state['extracted_trends']
+                    ]
+                    st.rerun()
+
+            with col_deselect_all:
+                if st.button("❌ 全不選", use_container_width=True):
+                    st.session_state['selected_keywords'] = []
+                    st.rerun()
+
+            # Keyword checkboxes
+            for kw_data in st.session_state['extracted_trends']:
+                keyword = kw_data['keyword']
+                trend_score = kw_data['trend_score']
+                rank = kw_data['rank']
+                is_high_trend = kw_data['is_high_trend']
+
+                # Emoji indicator
+                emoji = "🔥" if is_high_trend else "📊"
+
+                # Checkbox state
+                is_selected = keyword in st.session_state['selected_keywords']
+
+                col_checkbox, col_info = st.columns([4, 1])
+
+                with col_checkbox:
+                    if st.checkbox(
+                        f"{emoji} {keyword}",
+                        value=is_selected,
+                        key=f"kw_{rank}_{keyword}"
+                    ):
+                        if keyword not in st.session_state['selected_keywords']:
+                            st.session_state['selected_keywords'].append(keyword)
+                    else:
+                        if keyword in st.session_state['selected_keywords']:
+                            st.session_state['selected_keywords'].remove(keyword)
+
+                with col_info:
+                    st.caption(f"Trend: {trend_score}")
+
+            # Format selected keywords
+            if st.session_state['selected_keywords']:
+                formatted_keywords = trends_extractor.format_keywords_for_prompt(
+                    st.session_state['selected_keywords']
+                )
+                keywords_input = formatted_keywords
+
+                st.markdown("---")
+                st.markdown(f"**已選擇 {len(st.session_state['selected_keywords'])} 個關鍵字：**")
+                st.info(formatted_keywords)
+            else:
+                keywords_input = ""
+        else:
+            st.info("👆 點擊「提取熱門關鍵字」按鈕開始")
+            keywords_input = ""
+
+    with tab2:
+        st.markdown("**手動輸入趨勢關鍵字**")
+        keywords_input_manual = st.text_input(
+            "關鍵字（逗號分隔）",
+            value="春節, 紅色, 喜慶, 燈籠",
+            help="輸入趨勢關鍵字，用逗號分隔，例如：春節, 紅色, 喜慶",
+            key="manual_keywords"
+        )
+
+        st.info("💡 提示：也可以前往 [Google Trends](https://trends.google.com.hk/) 查看熱門關鍵字")
+
+        # Use manual input if in manual tab
+        if keywords_input_manual.strip():
+            keywords_input = keywords_input_manual
 
     # Generate button
     generate_button = st.button(
@@ -131,6 +295,47 @@ with col1:
 
 with col2:
     st.header("✨ 生成結果")
+
+    # Trend Score Visualization (if trends extracted)
+    if st.session_state['extracted_trends']:
+        with st.expander("📊 Trend Score 視覺化", expanded=True):
+            st.markdown("**過去 12 個月搜尋熱度：**")
+
+            # Prepare data for Plotly
+            keywords = [kw['keyword'] for kw in st.session_state['extracted_trends']]
+            scores = [kw['trend_score'] for kw in st.session_state['extracted_trends']]
+            is_selected_list = [
+                kw['keyword'] in st.session_state['selected_keywords']
+                for kw in st.session_state['extracted_trends']
+            ]
+
+            # Color based on selection
+            colors = ['#1f77b4' if selected else '#d3d3d3' for selected in is_selected_list]
+
+            # Create bar chart
+            fig = go.Figure(data=[
+                go.Bar(
+                    x=keywords,
+                    y=scores,
+                    marker_color=colors,
+                    text=[f"{score:.1f}" for score in scores],
+                    textposition='auto',
+                    hovertemplate='<b>%{x}</b><br>Trend Score: %{y:.2f}<extra></extra>'
+                )
+            ])
+
+            fig.update_layout(
+                title="關鍵字搜尋熱度 (Google Trends)",
+                xaxis_title="關鍵字",
+                yaxis_title="Trend Score",
+                height=300,
+                showlegend=False,
+                xaxis={'tickangle': -45}
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.caption("🔵 藍色 = 已選擇 | ⚪ 灰色 = 未選擇")
 
     # Generation logic
     if generate_button:

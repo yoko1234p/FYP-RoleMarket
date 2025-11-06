@@ -22,8 +22,30 @@
   - ✅ **Story 4.1 完成** - Streamlit 基礎架構 + Obj 1 整合
   - ✅ **Story 4.2 完成** - Obj 2 圖片生成與 CLIP 驗證整合
   - ✅ **Story 4.3 完成** - Obj 3 銷量預測儀表板（2025-11-06）
+  - ✅ **v1.1 更新** - Google Trends 自動提取熱門關鍵字（2025-11-06）
 
-### 最新改進（v1.3 - 2025-10-29）
+### 最新改進（v1.4 - 2025-11-06）
+
+**Objective 4 Enhancement: Google Trends 自動提取整合**
+
+新增功能：
+1. ✅ **自動提取熱門關鍵字** - 直接從 Google Trends API 獲取
+2. ✅ **7 大主題支援** - Halloween、Christmas、Spring Festival 等
+3. ✅ **視覺化 Trend Score** - Plotly 互動式柱狀圖
+4. ✅ **智能主題推薦** - 根據當前月份推薦相關主題
+5. ✅ **Checkbox 選擇器** - 彈性選擇關鍵字（全選/全不選）
+
+**改進前後對比：**
+| 方式 | 之前（手動輸入） | 現在（自動提取） |
+|------|--------------|--------------|
+| 關鍵字來源 | 用戶手動輸入 | Google Trends API 自動提取 |
+| 數據依據 | 主觀判斷 | 實際搜尋熱度（Trend Score） |
+| 效率 | 需手動查詢 Google Trends | 一鍵提取 Top 10 關鍵字 |
+| 視覺化 | 無 | Plotly Bar Chart + Trend Score |
+
+---
+
+### Objective 1 & 2 & 3 改進（v1.3 - 2025-10-29）
 
 **Phase A 完成：Objective 3 Transformer 預測模型達到企業級標準**
 
