@@ -1,5 +1,5 @@
 # BMAD (local only)
-.bmad-core/
+v4-backup/.bmad-core/
 .bmad-*/
 
 # Python
@@ -43,7 +43,15 @@ data/generated_images/
 data/trends/
 *.log
 .env
+.env.local
+.env.production
 config/api_keys.json
+
+# Streamlit secrets (DO NOT COMMIT)
+.streamlit/secrets.toml
+**/secrets.toml
+**/*_api_key.txt
+**/secrets.json
 
 # Model checkpoints
 *.pth

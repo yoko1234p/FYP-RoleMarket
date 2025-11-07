@@ -2,26 +2,62 @@
 Configuration for Streamlit Web Application
 
 管理 API keys、常數和應用配置。
+支援 Streamlit Secrets 和 .env 檔案。
 
 Author: Developer (James)
 Date: 2025-11-06
-Version: 1.0
+Updated: 2025-11-07 (Added Streamlit Secrets support)
+Version: 1.1
 """
 
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import streamlit as st
 
-# Load environment variables from .env file
+# Load environment variables from .env file (local development)
 load_dotenv()
+
+
+def get_secret(key: str, default=None):
+    """
+    Get secret from Streamlit secrets or environment variable.
+
+    Priority:
+    1. Streamlit Secrets (st.secrets) - for production deployment
+    2. Environment variable (.env) - for local development
+
+    Args:
+        key: Secret key name
+        default: Default value if not found
+
+    Returns:
+        Secret value or default
+
+    Example:
+        >>> api_key = get_secret("GOOGLE_API_KEY")
+        >>> api_key = get_secret("OPTIONAL_KEY", default="fallback_value")
+    """
+    # Try Streamlit secrets first (production)
+    try:
+        if hasattr(st, 'secrets') and key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        # st.secrets may not be available in non-Streamlit contexts
+        pass
+
+    # Fallback to environment variable (local dev)
+    return os.getenv(key, default)
 
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent
 
-# API Keys
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# API Keys (supports both .env and Streamlit Secrets)
+GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
 # Support both GPT_API_TOKEN and GPT_API_FREE_KEY
-GPT_API_TOKEN = os.getenv("GPT_API_TOKEN") or os.getenv("GPT_API_FREE_KEY")
+GPT_API_TOKEN = get_secret("GPT_API_TOKEN") or get_secret("GPT_API_FREE_KEY")
+HF_TOKEN = get_secret("HF_TOKEN")
+TTAPI_API_KEY = get_secret("TTAPI_API_KEY")
 
 # Validate required API keys
 if not GPT_API_TOKEN:
