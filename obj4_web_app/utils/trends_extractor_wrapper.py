@@ -18,14 +18,9 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from obj1_nlp_prompt.trends_extractor import TrendsExtractor
+from obj1_nlp_prompt.trends_extractor import TrendsExtractor, TrendsExtractionError
 
 logger = logging.getLogger(__name__)
-
-
-class TrendsExtractionError(Exception):
-    """Raised when trends extraction fails."""
-    pass
 
 
 class TrendsExtractorWrapper:

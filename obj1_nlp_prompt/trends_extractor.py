@@ -15,10 +15,58 @@ import time
 from typing import List, Dict
 from pathlib import Path
 import logging
+from functools import wraps
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# Regional configurations for Google Trends
+REGION_CONFIGS = {
+    'HK': {'geo': 'HK', 'hl': 'zh-TW', 'tz': 480},  # Hong Kong
+    'TW': {'geo': 'TW', 'hl': 'zh-TW', 'tz': 480},  # Taiwan
+    'US': {'geo': 'US', 'hl': 'en-US', 'tz': 360},  # United States
+    'CN': {'geo': 'CN', 'hl': 'zh-CN', 'tz': 480},  # China
+}
+
+
+def retry_with_backoff(max_retries=3, base_delay=2):
+    """
+    Decorator to retry a function with exponential backoff.
+
+    Args:
+        max_retries: Maximum number of retry attempts
+        base_delay: Base delay in seconds (will be exponentially increased)
+
+    Example:
+        @retry_with_backoff(max_retries=3, base_delay=2)
+        def fetch_data():
+            # API call that might fail
+            pass
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        delay = base_delay ** attempt  # Exponential: 2, 4, 8 seconds
+                        logger.warning(
+                            f"Attempt {attempt + 1}/{max_retries} failed for {func.__name__}: {str(e)}"
+                        )
+                        logger.info(f"Retrying in {delay}s...")
+                        time.sleep(delay)
+                    else:
+                        logger.error(
+                            f"All {max_retries} attempts failed for {func.__name__}: {str(e)}"
+                        )
+                        raise
+            return None
+        return wrapper
+    return decorator
 
 
 class TrendsExtractor:
@@ -37,20 +85,85 @@ class TrendsExtractor:
         >>> extractor.save_trends(trends, 'Halloween')
     """
 
-    def __init__(self, region: str = 'HK', lang: str = 'zh-TW', tz: int = 480):
+    def __init__(self, region: str = 'HK', lang: str = None, tz: int = None):
         """
-        Initialize Google Trends client.
+        Initialize Google Trends client with regional configuration.
 
         Args:
-            region: Google Trends region code (default: 'HK' for Hong Kong)
-            lang: Language code (default: 'zh-TW' for Traditional Chinese)
-            tz: Timezone offset in minutes (default: 480 for HKT)
+            region: Google Trends region code (default: 'HK')
+                   Supported: 'HK', 'TW', 'US', 'CN'
+            lang: Language code (optional, auto-detected from region config)
+            tz: Timezone offset in minutes (optional, auto-detected from region config)
         """
-        self.region = region
-        self.lang = lang
-        self.tz = tz
-        self.pytrend = TrendReq(hl=lang, tz=tz)
-        logger.info(f"TrendsExtractor initialized: region={region}, lang={lang}")
+        # Get regional configuration
+        if region in REGION_CONFIGS:
+            config = REGION_CONFIGS[region]
+            self.region = config['geo']
+            self.lang = lang or config['hl']
+            self.tz = tz or config['tz']
+            logger.info(f"Using regional config for {region}: {config}")
+        else:
+            # Fallback to manual configuration
+            self.region = region
+            self.lang = lang or 'zh-TW'
+            self.tz = tz or 480
+            logger.warning(
+                f"Region {region} not in predefined configs. "
+                f"Using manual config: geo={self.region}, hl={self.lang}, tz={self.tz}"
+            )
+
+        # Initialize pytrends client
+        try:
+            self.pytrend = TrendReq(hl=self.lang, tz=self.tz)
+            logger.info(
+                f"✅ TrendsExtractor initialized successfully: "
+                f"region={self.region}, lang={self.lang}, tz={self.tz}"
+            )
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize TrendReq: {str(e)}")
+            raise
+
+    @retry_with_backoff(max_retries=3, base_delay=2)
+    def _fetch_trends_data(
+        self,
+        theme_keywords: List[str],
+        timeframe: str
+    ) -> tuple[pd.DataFrame, dict]:
+        """
+        Fetch trends data from Google Trends API with retry logic.
+
+        Args:
+            theme_keywords: List of keywords to query
+            timeframe: Google Trends timeframe
+
+        Returns:
+            Tuple of (interest_df, related_queries)
+
+        Raises:
+            Exception: If all retry attempts fail
+        """
+        logger.debug(f"Querying Google Trends API...")
+        logger.debug(f"  Keywords: {theme_keywords}")
+        logger.debug(f"  Timeframe: {timeframe}")
+        logger.debug(f"  Region: {self.region}")
+
+        # Build payload
+        self.pytrend.build_payload(
+            theme_keywords,
+            cat=0,  # All categories
+            timeframe=timeframe,
+            geo=self.region
+        )
+
+        # Get interest over time
+        interest_df = self.pytrend.interest_over_time()
+        logger.debug(f"  Interest over time shape: {interest_df.shape}")
+
+        # Get related queries
+        related_queries = self.pytrend.related_queries()
+        logger.debug(f"  Related queries retrieved: {len(related_queries)} keywords")
+
+        return interest_df, related_queries
 
     def extract_keywords(
         self,
@@ -77,26 +190,41 @@ class TrendsExtractor:
             0  萬聖節      95.0        Halloween
             1  南瓜       78.5        Halloween
         """
-        logger.info(f"Extracting trends for theme: {theme}")
+        logger.info(f"📊 Starting trend extraction for theme: {theme}")
         start_time = time.time()
 
         try:
             # Build keyword list for theme (English + Chinese)
             theme_keywords = self._get_theme_keywords(theme)
+            logger.info(f"  Using {len(theme_keywords)} seed keywords: {theme_keywords}")
 
-            # Query Google Trends
-            self.pytrend.build_payload(
-                theme_keywords,
-                cat=0,  # All categories
-                timeframe=timeframe,
-                geo=self.region
-            )
+            # Fetch trends data (with retry logic)
+            try:
+                interest_df, related_queries = self._fetch_trends_data(
+                    theme_keywords,
+                    timeframe
+                )
+            except Exception as e:
+                # Improved error message
+                error_msg = (
+                    f"⚠️ 未找到相關趨勢數據：{theme}\n\n"
+                    f"可能原因：\n"
+                    f"1. Google Trends API 限流（請稍後重試）\n"
+                    f"2. 主題關鍵字 '{theme}' 未找到相關數據\n"
+                    f"3. 網絡連接問題\n\n"
+                    f"💡 建議：\n"
+                    f"- 請稍等 1-2 分鐘後重試\n"
+                    f"- 或使用「✍️ 手動輸入」標籤頁手動輸入關鍵字\n"
+                    f"- 嘗試其他主題（如：🎄 聖誕節、🎃 萬聖節）\n\n"
+                    f"技術細節：{str(e)}"
+                )
+                logger.error(error_msg)
+                raise TrendsExtractionError(error_msg)
 
-            # Get interest over time
-            interest_df = self.pytrend.interest_over_time()
-
+            # Check if data is empty
             if interest_df.empty:
-                logger.warning(f"No trends data found for theme: {theme}")
+                logger.warning(f"⚠️ No trends data found for theme: {theme}")
+                logger.warning(f"  This could mean the keywords have very low search volume")
                 return pd.DataFrame(columns=['keyword', 'trend_score', 'theme'])
 
             # Calculate average trend score
@@ -109,9 +237,10 @@ class TrendsExtractor:
                         'trend_score': avg_score,
                         'theme': theme
                     })
+                    logger.debug(f"  Keyword '{keyword}' avg score: {avg_score:.2f}")
 
             # Get related queries
-            related_queries = self.pytrend.related_queries()
+            related_count = 0
             for keyword in theme_keywords:
                 if keyword in related_queries and related_queries[keyword]['top'] is not None:
                     top_related = related_queries[keyword]['top'].head(5)
@@ -121,23 +250,40 @@ class TrendsExtractor:
                             'trend_score': row['value'],
                             'theme': theme
                         })
+                        related_count += 1
+
+            logger.info(f"  Found {related_count} related keywords")
 
             # Convert to DataFrame and sort
             trends_df = pd.DataFrame(trend_scores)
+            if trends_df.empty:
+                logger.warning(f"⚠️ No valid trend scores for theme: {theme}")
+                return pd.DataFrame(columns=['keyword', 'trend_score', 'theme'])
+
             trends_df = trends_df.sort_values('trend_score', ascending=False)
             trends_df = trends_df.head(top_n)
 
             elapsed = time.time() - start_time
-            logger.info(f"Extracted {len(trends_df)} keywords for {theme} in {elapsed:.2f}s")
+            logger.info(
+                f"✅ Extracted {len(trends_df)} keywords for {theme} "
+                f"in {elapsed:.2f}s"
+            )
 
             # Rate limiting (avoid Google Trends 429 errors)
             time.sleep(2)
 
             return trends_df
 
+        except TrendsExtractionError:
+            # Re-raise our custom error with improved message
+            raise
         except Exception as e:
-            logger.error(f"Error extracting trends for {theme}: {e}")
-            return pd.DataFrame(columns=['keyword', 'trend_score', 'theme'])
+            logger.error(f"❌ Unexpected error extracting trends for {theme}: {str(e)}", exc_info=True)
+            raise TrendsExtractionError(
+                f"趨勢提取過程中發生錯誤：{str(e)}\n\n"
+                f"請稍後重試或使用手動輸入模式。"
+            )
+
 
     def extract_all_themes(
         self,
@@ -216,6 +362,15 @@ class TrendsExtractor:
         }
 
         return theme_map.get(theme, [theme])
+
+
+class TrendsExtractionError(Exception):
+    """
+    Custom exception for trends extraction failures.
+
+    Raised when Google Trends API calls fail after all retry attempts.
+    """
+    pass
 
 
 def main():
