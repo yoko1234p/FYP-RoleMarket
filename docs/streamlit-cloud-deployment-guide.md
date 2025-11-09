@@ -141,7 +141,7 @@ GPT_API_FREE_MODEL = "gpt-3.5-turbo"
 # =====================================
 
 # Hugging Face API (推薦用於圖片生成)
-HF_TOKEN = "hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+HF_TOKEN = "your-hf-token-here"
 
 # TTAPI Midjourney API (Backup)
 TTAPI_API_KEY = "your-ttapi-key-here"
