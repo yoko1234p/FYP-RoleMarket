@@ -1,16 +1,8 @@
-# System packages for Streamlit Cloud
-# These will be installed via apt-get before Python dependencies
-
-# Image processing libraries
 libgl1-mesa-glx
 libglib2.0-0
 libsm6
 libxext6
 libxrender-dev
 libgomp1
-
-# For Chinese text processing (jieba)
 libc-bin
-
-# General utilities
 git
