@@ -21,6 +21,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 from obj2_midjourney_api.google_gemini_client import GoogleGeminiImageClient
+from obj2_midjourney_api.gemini_openai_client import GeminiOpenAIImageClient
 from obj2_midjourney_api.character_focused_validator import CharacterFocusedValidator
 
 logger = logging.getLogger(__name__)
@@ -43,20 +44,27 @@ class DesignGeneratorWrapper:
     提供簡化的 API 供 Streamlit 使用。
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, use_openai_api: bool = True):
         """
         Initialize DesignGeneratorWrapper.
 
         Args:
-            api_key: Google Gemini API key (optional, defaults to env variable)
+            api_key: API key (optional, defaults to env variable)
+            use_openai_api: Use OpenAI-compatible API (default: True, uses GEMINI_OPENAI_API_KEY)
+                           If False, uses official Google API (uses GEMINI_API_KEY)
         """
-        # Initialize Google Gemini client
+        # Initialize Gemini client
         try:
-            self.client = GoogleGeminiImageClient(api_key=api_key)
-            logger.info("GoogleGeminiImageClient initialized")
+            if use_openai_api:
+                # Use preview model for OpenAI API (supports all features)
+                self.client = GeminiOpenAIImageClient(api_key=api_key, use_preview=True)
+                logger.info("GeminiOpenAIImageClient initialized (preview model)")
+            else:
+                self.client = GoogleGeminiImageClient(api_key=api_key)
+                logger.info("GoogleGeminiImageClient initialized")
         except Exception as e:
-            logger.error(f"Failed to initialize GoogleGeminiImageClient: {e}")
-            raise DesignGenerationError(f"無法初始化 Google Gemini 客戶端：{str(e)}")
+            logger.error(f"Failed to initialize Gemini client: {e}")
+            raise DesignGenerationError(f"無法初始化 Gemini 客戶端：{str(e)}")
 
         # Initialize CLIP validator (lazy load)
         self._validator = None
