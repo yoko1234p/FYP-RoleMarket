@@ -831,12 +831,51 @@ if st.session_state.get('final_keywords'):
     st.markdown("**Theme Context (for Prompt Generation)**")
     st.caption("⚠️ Theme is only used to provide context for LLM prompt generation, NOT for trend extraction")
 
-    theme_for_prompt = st.text_input(
-        "Theme/Context",
-        value="Cozy Christmas",
-        placeholder="e.g., Cozy Christmas, Modern Halloween, Spring Festival",
-        help="Provide theme/context to guide the AI prompt generation"
+    # Holiday/Theme options
+    THEME_OPTIONS = {
+        "🎄 Christmas": "Cozy Christmas",
+        "🎃 Halloween": "Spooky Halloween",
+        "🧧 Chinese New Year": "Chinese New Year / Spring Festival",
+        "💝 Valentine's Day": "Valentine's Day Romance",
+        "🐰 Easter": "Easter Spring",
+        "🦃 Thanksgiving": "Thanksgiving Harvest",
+        "🎆 New Year": "New Year Celebration",
+        "🌸 Spring": "Spring Blossom",
+        "☀️ Summer": "Summer Beach",
+        "🍂 Autumn": "Autumn Harvest",
+        "❄️ Winter": "Winter Wonderland",
+        "🎂 Birthday": "Birthday Party",
+        "🎓 Graduation": "Graduation Ceremony",
+        "👶 Baby Shower": "Baby Shower Celebration",
+        "💍 Wedding": "Wedding Celebration",
+        "🎮 Gaming": "Gaming Culture",
+        "⚽ Sports": "Sports & Fitness",
+        "🎵 Music": "Music Festival",
+        "🎬 Movies": "Movie Theme",
+        "🍕 Food": "Food & Cuisine",
+        "✏️ Custom": "Custom Theme"
+    }
+
+    selected_theme_key = st.selectbox(
+        "Select Theme/Context",
+        options=list(THEME_OPTIONS.keys()),
+        index=0,  # Default to Christmas
+        help="Select a theme to guide the AI prompt generation"
     )
+
+    # If custom selected, show text input
+    if selected_theme_key == "✏️ Custom":
+        theme_for_prompt = st.text_input(
+            "Enter Custom Theme",
+            value="",
+            placeholder="e.g., Cyberpunk Future, Vintage 80s, Medieval Fantasy",
+            help="Enter your custom theme/context"
+        )
+        if not theme_for_prompt.strip():
+            st.warning("⚠️ Please enter a custom theme")
+    else:
+        theme_for_prompt = THEME_OPTIONS[selected_theme_key]
+        st.caption(f"Selected: **{theme_for_prompt}**")
 
     generate_button = st.button(
         "🚀 Generate AI Prompt",
@@ -850,8 +889,10 @@ if st.session_state.get('final_keywords'):
             st.error("❌ Please enter character name")
         elif not character_desc.strip():
             st.error("❌ Please enter character description")
-        elif not theme_for_prompt.strip():
-            st.error("❌ Please enter theme/context for prompt generation")
+        elif selected_theme_key == "✏️ Custom" and not theme_for_prompt.strip():
+            st.error("❌ Please enter custom theme or select a preset theme")
+        elif not theme_for_prompt or not theme_for_prompt.strip():
+            st.error("❌ Please select or enter a theme for prompt generation")
         else:
             # Generate prompt with progress bar
             with st.spinner("⏳ Generating prompt..."):
