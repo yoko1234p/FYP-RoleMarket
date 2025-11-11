@@ -453,13 +453,13 @@ with col1:
         "Extraction Method",
         options=["🔍 Auto Extract (Google Trends)", "✍️ Manual Input"],
         horizontal=True,
-        help="Auto Extract: Extract trending keywords from Google Trends, then generate prompt\nManual Input: Enter complete image generation prompt directly (skip to Image Generation)"
+        help="Auto Extract: Extract trending keywords from Google Trends, then generate prompt\nManual Input: Enter complete image generation prompt directly (skip keyword extraction and prompt generation)"
     )
 
     if extraction_method == "✍️ Manual Input":
         # Manual input section
         st.markdown("**Manual Prompt Input**")
-        st.caption("Enter complete image generation prompt directly. Skip keyword extraction and go straight to Image Generation.")
+        st.caption("Enter complete image generation prompt directly. Skip keyword extraction and prompt generation steps.")
 
         manual_prompt_input = st.text_area(
             "Image Generation Prompt",
@@ -482,7 +482,7 @@ with col1:
                 st.session_state['additional_keywords'] = ""
                 st.session_state['final_keywords'] = []
 
-                st.success(f"✅ Manual prompt loaded! You can now proceed to Image Generation (Step 4).")
+                st.success(f"✅ Manual prompt loaded! Check the 📝 Generated Prompt section below to review your prompt.")
                 st.rerun()
             else:
                 st.error("❌ Please enter a prompt")
