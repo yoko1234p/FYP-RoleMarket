@@ -453,45 +453,39 @@ with col1:
         "Extraction Method",
         options=["🔍 Auto Extract (Google Trends)", "✍️ Manual Input"],
         horizontal=True,
-        help="Choose between automatic trend extraction or manual keyword input"
+        help="Auto Extract: Extract trending keywords from Google Trends, then generate prompt\nManual Input: Enter complete image generation prompt directly (skip to Image Generation)"
     )
 
     if extraction_method == "✍️ Manual Input":
         # Manual input section
-        st.markdown("**Manual Keyword Input**")
-        st.caption("Enter keywords manually (comma-separated). Useful when Google Trends API is rate-limited.")
+        st.markdown("**Manual Prompt Input**")
+        st.caption("Enter complete image generation prompt directly. Skip keyword extraction and go straight to Image Generation.")
 
-        manual_keywords_input = st.text_area(
-            "Keywords",
-            placeholder="e.g., christmas, cozy, snow, warm, festive, santa, gift, celebration",
-            help="Enter keywords separated by commas"
+        manual_prompt_input = st.text_area(
+            "Image Generation Prompt",
+            placeholder="e.g., Lulu Pig wearing a cozy Christmas sweater, sitting by a fireplace with hot cocoa, warm lighting, festive decorations, cute and heartwarming scene",
+            help="Enter the complete prompt for image generation",
+            height=150
         )
 
-        if st.button("✅ Use Manual Keywords", use_container_width=True, type="primary"):
-            if manual_keywords_input.strip():
-                # Parse manual keywords
-                manual_keywords = [kw.strip() for kw in manual_keywords_input.split(',') if kw.strip()]
+        if st.button("✅ Use Manual Prompt", use_container_width=True, type="primary"):
+            if manual_prompt_input.strip():
+                # Directly set as generated prompt (skip keyword extraction and prompt generation)
+                st.session_state['generated_prompt'] = manual_prompt_input.strip()
+                st.session_state['last_keywords'] = "Manual Input"
+                st.session_state['last_character_name'] = character_name
+                st.session_state['last_theme'] = "Manual Prompt"
 
-                # Format as trends data (fake scores for display)
-                st.session_state['extracted_trends'] = [
-                    {
-                        'keyword': kw,
-                        'trend_score': 50.0,  # Placeholder
-                        'visual_score': 5.0,  # Placeholder
-                        'combined_score': 5.0,  # Placeholder
-                        'rank': i + 1,
-                        'is_high_trend': False
-                    }
-                    for i, kw in enumerate(manual_keywords)
-                ]
-                # Directly set as final keywords for Manual Input mode
-                st.session_state['selected_keywords'] = manual_keywords
+                # Clear keyword-related states (not needed for manual prompt)
+                st.session_state['extracted_trends'] = []
+                st.session_state['selected_keywords'] = []
                 st.session_state['additional_keywords'] = ""
-                st.session_state['final_keywords'] = manual_keywords
-                st.success(f"✅ Loaded {len(manual_keywords)} manual keywords! Ready for prompt generation.")
+                st.session_state['final_keywords'] = []
+
+                st.success(f"✅ Manual prompt loaded! You can now proceed to Image Generation (Step 4).")
                 st.rerun()
             else:
-                st.error("❌ Please enter at least one keyword")
+                st.error("❌ Please enter a prompt")
 
     else:
         # Auto extraction section
