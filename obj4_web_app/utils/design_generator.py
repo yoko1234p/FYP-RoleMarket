@@ -162,9 +162,9 @@ class DesignGeneratorWrapper:
         generated_image: Image.Image,
         reference_image_path: str,
         strategy: str = "center_crop"
-    ) -> float:
+    ) -> tuple[float, np.ndarray]:
         """
-        計算 CLIP 相似度。
+        計算 CLIP 相似度並提取 embedding。
 
         Args:
             generated_image: 生成的圖片 (PIL Image)
@@ -172,13 +172,13 @@ class DesignGeneratorWrapper:
             strategy: CLIP 驗證策略 (center_crop, background_removal, original)
 
         Returns:
-            相似度分數 (0.0 - 1.0)
+            (similarity, embedding): 相似度分數 (0.0 - 1.0) 和 CLIP embedding (768-dim)
 
         Raises:
             CLIPValidationError: 當計算失敗時
         """
         try:
-            logger.info("Computing CLIP similarity...")
+            logger.info("Computing CLIP similarity and embedding...")
 
             # Save generated image temporarily for validator
             temp_path = PROJECT_ROOT / "data" / "temp" / "temp_generated.png"
@@ -193,12 +193,16 @@ class DesignGeneratorWrapper:
             )
 
             similarity = result['similarity']
-            logger.info(f"CLIP similarity: {similarity:.4f}")
+
+            # Extract CLIP embedding from generated image
+            embedding = self.validator.compute_embedding(str(temp_path), use_cache=False)
+
+            logger.info(f"CLIP similarity: {similarity:.4f}, embedding shape: {embedding.shape}")
 
             # Cleanup temp file
             temp_path.unlink(missing_ok=True)
 
-            return similarity
+            return similarity, embedding
 
         except Exception as e:
             logger.error(f"CLIP validation failed: {str(e)}")
@@ -295,19 +299,21 @@ class DesignGeneratorWrapper:
             )
 
             if design_result['success']:
-                # Compute CLIP similarity
+                # Compute CLIP similarity and extract embedding
                 try:
-                    similarity = self.compute_clip_similarity(
+                    similarity, embedding = self.compute_clip_similarity(
                         generated_image=design_result['image'],
                         reference_image_path=reference_image_path,
                         strategy="center_crop"
                     )
                     design_result['clip_similarity'] = similarity
+                    design_result['clip_embedding'] = embedding  # Store real CLIP embedding
                     successful_count += 1
 
                 except CLIPValidationError as e:
                     logger.warning(f"CLIP validation failed for image {i+1}: {e}")
                     design_result['clip_similarity'] = 0.0
+                    design_result['clip_embedding'] = None
                     design_result['error'] = f"CLIP validation failed: {str(e)}"
 
             results.append(design_result)
@@ -369,14 +375,15 @@ class DesignGeneratorWrapper:
             )
 
             if design_result['success']:
-                # Compute CLIP similarity
+                # Compute CLIP similarity and extract embedding
                 try:
-                    similarity = self.compute_clip_similarity(
+                    similarity, embedding = self.compute_clip_similarity(
                         generated_image=design_result['image'],
                         reference_image_path=reference_image_path,
                         strategy="center_crop"
                     )
                     design_result['clip_similarity'] = similarity
+                    design_result['clip_embedding'] = embedding  # Store real CLIP embedding
 
                     with lock:
                         successful_count += 1
@@ -384,6 +391,7 @@ class DesignGeneratorWrapper:
                 except CLIPValidationError as e:
                     logger.warning(f"CLIP validation failed for image {index+1}: {e}")
                     design_result['clip_similarity'] = 0.0
+                    design_result['clip_embedding'] = None
                     design_result['error'] = f"CLIP validation failed: {str(e)}"
             else:
                 # Generation failed - log the error
@@ -427,6 +435,7 @@ class DesignGeneratorWrapper:
                         'image': None,
                         'image_path': None,
                         'clip_similarity': 0.0,
+                        'clip_embedding': None,
                         'generation_time': 0.0,
                         'success': False,
                         'error': f"Task failed: {error_msg}"
