@@ -21,6 +21,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 from obj3_lstm_forecast.hybrid_transformer_model import HybridTransformer
+from obj3_lstm_forecast.hybrid_transformer_model_legacy import HybridTransformerLegacy
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,23 @@ class ForecastPredictorWrapper:
     """
 
     # Model configuration (from Exp #11v2)
+    # Legacy model configuration (compatible with saved model from 2025-10-28)
+    MODEL_CONFIG_LEGACY = {
+        'ts_input_dim': 1,
+        'static_input_dim': 781,  # Old model used 781
+        'd_model': 64,
+        'nhead': 4,  # Old model used 4 heads
+        'num_encoder_layers': 2,
+        'dim_feedforward': 256,
+        'static_hidden_dim': 256,
+        'static_hidden_dim_2': 128,
+        'fusion_hidden_dim': 128,
+        'fusion_hidden_dim_2': 64,
+        'dropout': 0.3,
+        'max_seq_len': 4  # Old model used 4
+    }
+
+    # New model configuration (for future retraining)
     MODEL_CONFIG = {
         'ts_input_dim': 1,
         'static_input_dim': 772,  # CLIP (768) + Season (4)
@@ -106,6 +124,8 @@ class ForecastPredictorWrapper:
         """
         載入訓練好的 Transformer 模型。
 
+        使用舊版模型架構以兼容已訓練的模型檔案。
+
         Returns:
             Loaded model in eval mode
 
@@ -113,8 +133,9 @@ class ForecastPredictorWrapper:
             ModelLoadError: 當模型載入失敗時
         """
         try:
-            # Initialize model architecture
-            model = HybridTransformer(**self.MODEL_CONFIG)
+            # Use legacy model architecture (compatible with saved model)
+            logger.info("Loading model with legacy architecture...")
+            model = HybridTransformerLegacy(**self.MODEL_CONFIG_LEGACY)
 
             # Load weights
             state_dict = torch.load(
@@ -123,10 +144,11 @@ class ForecastPredictorWrapper:
                 weights_only=True    # Security: only load weights
             )
 
-            model.load_state_dict(state_dict)
+            # Load state dict directly (architecture matches now)
+            model.load_state_dict(state_dict, strict=True)
             model.eval()
 
-            logger.info(f"✅ Model loaded from {self.model_path}")
+            logger.info(f"✅ Model loaded from {self.model_path} (legacy architecture)")
             return model
 
         except Exception as e:
@@ -202,11 +224,19 @@ class ForecastPredictorWrapper:
             # Prepare inputs
             season_encoding = self._encode_season(season)  # (4,)
             static_features = np.concatenate([clip_embedding, season_encoding])  # (772,)
+
+            # IMPORTANT: Legacy model requires 781 dimensions
+            # Add 9-dimensional padding to match old model architecture
+            if static_features.shape[0] == 772:
+                padding = np.zeros(9, dtype=np.float32)
+                static_features = np.concatenate([static_features, padding])  # (781,)
+                logger.debug(f"Added 9-dim padding for legacy model compatibility (772 → 781)")
+
             time_series = np.array(trends_history, dtype=np.float32).reshape(-1, 1)  # (4, 1)
 
             # Convert to tensors
             ts_tensor = torch.FloatTensor(time_series).unsqueeze(0)  # (1, 4, 1)
-            static_tensor = torch.FloatTensor(static_features).unsqueeze(0)  # (1, 772)
+            static_tensor = torch.FloatTensor(static_features).unsqueeze(0)  # (1, 781)
 
             # Predict
             with torch.no_grad():
