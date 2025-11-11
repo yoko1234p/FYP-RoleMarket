@@ -999,12 +999,16 @@ if st.session_state['generated_prompt'] and design_generator:
 
         # Generation parameters
         with st.expander("⚙️ Generation Parameters"):
+            # Use default from config (optimized for Cloud if deployed)
+            default_num = config.DEFAULT_NUM_IMAGES if hasattr(config, 'DEFAULT_NUM_IMAGES') else 4
+
             num_images = st.slider(
                 "Number of Images",
                 min_value=1,
                 max_value=4,
-                value=4,
-                help="Select number of design images to generate (1-4)"
+                value=default_num,
+                help=f"Select number of design images to generate (1-4). "
+                     f"{'Cloud optimized: 2 images recommended' if config.IS_STREAMLIT_CLOUD else 'Local: 4 images default'}"
             )
 
         # Generate Images button

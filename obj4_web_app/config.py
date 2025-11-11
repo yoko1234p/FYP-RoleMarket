@@ -52,8 +52,14 @@ def get_secret(key: str, default=None):
 # Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent
 
+# Detect Cloud environment
+IS_STREAMLIT_CLOUD = os.getenv("STREAMLIT_SHARING_MODE") == "true" or \
+                     os.getenv("STREAMLIT_RUNTIME_ENV") == "cloud" or \
+                     hasattr(st, 'secrets')
+
 # API Keys (supports both .env and Streamlit Secrets)
 GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
+GEMINI_OPENAI_API_KEY = get_secret("GEMINI_OPENAI_API_KEY")
 # Support both GPT_API_TOKEN and GPT_API_FREE_KEY
 GPT_API_TOKEN = get_secret("GPT_API_TOKEN") or get_secret("GPT_API_FREE_KEY")
 HF_TOKEN = get_secret("HF_TOKEN")
@@ -63,14 +69,15 @@ TTAPI_API_KEY = get_secret("TTAPI_API_KEY")
 if not GPT_API_TOKEN:
     raise ValueError(
         "GPT_API_TOKEN or GPT_API_FREE_KEY not found in environment. "
-        "Please set it in .env file or environment variables."
+        "Please set it in .env file or Streamlit Secrets."
     )
 
 # Optional API keys (warnings only)
-if not GOOGLE_API_KEY:
+if not GOOGLE_API_KEY and not GEMINI_OPENAI_API_KEY:
     import warnings
     warnings.warn(
-        "GOOGLE_API_KEY not found. Image generation features will be unavailable."
+        "Neither GOOGLE_API_KEY nor GEMINI_OPENAI_API_KEY found. "
+        "Image generation features will be unavailable."
     )
 
 # Application constants
@@ -96,6 +103,18 @@ TRANSFORMER_NHEAD = 8
 # Streamlit cache settings
 CACHE_TTL_TRENDS = 3600  # 1 hour
 CACHE_TTL_MODEL = None  # Never expire (resource cache)
+
+# Cloud environment optimizations
+if IS_STREAMLIT_CLOUD:
+    # Reduce resource usage in Cloud
+    DEFAULT_NUM_IMAGES = 2  # Generate 2 images instead of 4
+    ENABLE_MULTITHREADING = True  # Keep enabled (already optimized for Cloud)
+    CLIP_MODEL_CACHE = True  # Cache CLIP model
+else:
+    # Local development settings
+    DEFAULT_NUM_IMAGES = 4
+    ENABLE_MULTITHREADING = True
+    CLIP_MODEL_CACHE = True
 
 # Error messages (Traditional Chinese)
 ERROR_MESSAGES = {

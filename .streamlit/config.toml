@@ -10,6 +10,19 @@ headless = true
 enableCORS = false
 enableXsrfProtection = true
 maxUploadSize = 200
+# Optimize for Streamlit Cloud
+runOnSave = false
+fileWatcherType = "none"
 
 [browser]
 gatherUsageStats = false
+
+[runner]
+# Optimize for Cloud deployment
+magicEnabled = true
+fastReruns = true
+
+[client]
+# Improve stability in Cloud environment
+showErrorDetails = true
+toolbarMode = "auto"
