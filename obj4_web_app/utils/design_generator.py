@@ -351,10 +351,14 @@ class DesignGeneratorWrapper:
 
             # Update progress - starting
             if progress_callback:
-                with lock:
-                    message = f"Generating image {index+1}/{num_images}..."
-                    progress = completed_count / num_images
-                    progress_callback(progress, message)
+                try:
+                    with lock:
+                        message = f"Generating image {index+1}/{num_images}..."
+                        progress = completed_count / num_images
+                        progress_callback(progress, message)
+                except Exception as e:
+                    # Ignore progress callback errors in multithreading
+                    logger.warning(f"Progress callback failed (non-critical): {e}")
 
             # Generate design
             design_result = self.generate_single_design(
@@ -381,14 +385,22 @@ class DesignGeneratorWrapper:
                     logger.warning(f"CLIP validation failed for image {index+1}: {e}")
                     design_result['clip_similarity'] = 0.0
                     design_result['error'] = f"CLIP validation failed: {str(e)}"
+            else:
+                # Generation failed - log the error
+                error_msg = design_result.get('error', 'Unknown error')
+                logger.error(f"Image {index+1} generation failed: {error_msg}")
 
             # Update progress - completed
             with lock:
                 completed_count += 1
                 if progress_callback:
-                    progress = completed_count / num_images
-                    message = f"Completed {completed_count}/{num_images} images"
-                    progress_callback(progress, message)
+                    try:
+                        progress = completed_count / num_images
+                        message = f"Completed {completed_count}/{num_images} images"
+                        progress_callback(progress, message)
+                    except Exception as e:
+                        # Ignore progress callback errors in multithreading
+                        logger.warning(f"Progress callback failed (non-critical): {e}")
 
             return (index, design_result)
 
@@ -407,7 +419,8 @@ class DesignGeneratorWrapper:
                 except Exception as e:
                     # Get the index for this failed task
                     index = futures[future]
-                    logger.error(f"Task {index} failed with exception: {e}")
+                    error_msg = str(e) if str(e) else repr(e)
+                    logger.error(f"Task {index} failed with exception: {error_msg}")
 
                     # Create error result instead of leaving None
                     results[index] = {
@@ -416,7 +429,7 @@ class DesignGeneratorWrapper:
                         'clip_similarity': 0.0,
                         'generation_time': 0.0,
                         'success': False,
-                        'error': f"Task failed: {str(e)}"
+                        'error': f"Task failed: {error_msg}"
                     }
 
         # Final summary
