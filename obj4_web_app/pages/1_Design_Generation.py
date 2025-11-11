@@ -1068,6 +1068,8 @@ if st.session_state['generated_prompt'] and design_generator:
             st.markdown("### Generation Results")
 
             results = st.session_state['generated_images']
+            # Filter out None results (can happen in multithreading if tasks fail)
+            results = [r for r in results if r is not None]
             successful_results = [r for r in results if r.get('success')]
 
             if successful_results:

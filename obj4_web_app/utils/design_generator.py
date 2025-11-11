@@ -15,6 +15,8 @@ import logging
 from PIL import Image
 import time
 import io
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -64,7 +66,7 @@ class DesignGeneratorWrapper:
                 logger.info("GoogleGeminiImageClient initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Gemini client: {e}")
-            raise DesignGenerationError(f"無法初始化 Gemini 客戶端：{str(e)}")
+            raise DesignGenerationError(f"Failed to initialize Gemini client: {str(e)}")
 
         # Initialize CLIP validator (lazy load)
         self._validator = None
@@ -200,7 +202,7 @@ class DesignGeneratorWrapper:
 
         except Exception as e:
             logger.error(f"CLIP validation failed: {str(e)}")
-            raise CLIPValidationError(f"CLIP 驗證失敗：{str(e)}")
+            raise CLIPValidationError(f"CLIP validation failed: {str(e)}")
 
     def generate_designs(
         self,
@@ -208,7 +210,8 @@ class DesignGeneratorWrapper:
         reference_image_path: str,
         num_images: int = 4,
         progress_callback: Optional[Callable[[float, str], None]] = None,
-        max_retries: int = 3
+        max_retries: int = 3,
+        use_multithreading: bool = True
     ) -> List[Dict]:
         """
         生成多張設計圖並計算 CLIP 相似度。
@@ -219,6 +222,7 @@ class DesignGeneratorWrapper:
             num_images: 生成數量 (1-4)
             progress_callback: 進度回調函數 (progress: float, message: str)
             max_retries: 最大重試次數
+            use_multithreading: 使用多線程並行生成 (default: True)
 
         Returns:
             List[Dict]: [
@@ -248,6 +252,26 @@ class DesignGeneratorWrapper:
         if not 1 <= num_images <= 4:
             raise ValueError("num_images must be between 1 and 4")
 
+        if use_multithreading:
+            return self._generate_designs_parallel(
+                prompt, reference_image_path, num_images,
+                progress_callback, max_retries
+            )
+        else:
+            return self._generate_designs_sequential(
+                prompt, reference_image_path, num_images,
+                progress_callback, max_retries
+            )
+
+    def _generate_designs_sequential(
+        self,
+        prompt: str,
+        reference_image_path: str,
+        num_images: int,
+        progress_callback: Optional[Callable[[float, str], None]],
+        max_retries: int
+    ) -> List[Dict]:
+        """Sequential generation (original implementation)."""
         results = []
         successful_count = 0
 
@@ -255,7 +279,7 @@ class DesignGeneratorWrapper:
             # Update progress
             if progress_callback:
                 progress = i / num_images
-                message = f"正在生成第 {i+1}/{num_images} 張設計圖..."
+                message = f"Generating image {i+1}/{num_images}..."
                 progress_callback(progress, message)
 
             # Generate filename
@@ -284,18 +308,119 @@ class DesignGeneratorWrapper:
                 except CLIPValidationError as e:
                     logger.warning(f"CLIP validation failed for image {i+1}: {e}")
                     design_result['clip_similarity'] = 0.0
-                    design_result['error'] = f"CLIP 驗證失敗：{str(e)}"
+                    design_result['error'] = f"CLIP validation failed: {str(e)}"
 
             results.append(design_result)
 
             # Update progress (generation complete)
             if progress_callback:
                 progress = (i + 1) / num_images
-                message = f"已完成 {i+1}/{num_images} 張設計圖"
+                message = f"Completed {i+1}/{num_images} images"
                 progress_callback(progress, message)
 
         # Final summary
-        logger.info(f"✅ 生成完成：{successful_count}/{num_images} 張成功")
+        logger.info(f"✅ Generation complete: {successful_count}/{num_images} successful")
+
+        return results
+
+    def _generate_designs_parallel(
+        self,
+        prompt: str,
+        reference_image_path: str,
+        num_images: int,
+        progress_callback: Optional[Callable[[float, str], None]],
+        max_retries: int
+    ) -> List[Dict]:
+        """
+        Parallel generation using ThreadPoolExecutor.
+
+        Generates multiple images concurrently for faster performance.
+        """
+        results = [None] * num_images  # Pre-allocate results list
+        successful_count = 0
+        completed_count = 0
+        lock = threading.Lock()  # Thread-safe counter
+
+        def generate_single_task(index: int) -> Tuple[int, Dict]:
+            """Worker function for generating a single image."""
+            nonlocal completed_count, successful_count
+
+            # Generate filename
+            timestamp = int(time.time())
+            filename = f"design_{timestamp}_var{index+1}.png"
+
+            # Update progress - starting
+            if progress_callback:
+                with lock:
+                    message = f"Generating image {index+1}/{num_images}..."
+                    progress = completed_count / num_images
+                    progress_callback(progress, message)
+
+            # Generate design
+            design_result = self.generate_single_design(
+                prompt=prompt,
+                reference_image_path=reference_image_path,
+                output_filename=filename,
+                max_retries=max_retries
+            )
+
+            if design_result['success']:
+                # Compute CLIP similarity
+                try:
+                    similarity = self.compute_clip_similarity(
+                        generated_image=design_result['image'],
+                        reference_image_path=reference_image_path,
+                        strategy="center_crop"
+                    )
+                    design_result['clip_similarity'] = similarity
+
+                    with lock:
+                        successful_count += 1
+
+                except CLIPValidationError as e:
+                    logger.warning(f"CLIP validation failed for image {index+1}: {e}")
+                    design_result['clip_similarity'] = 0.0
+                    design_result['error'] = f"CLIP validation failed: {str(e)}"
+
+            # Update progress - completed
+            with lock:
+                completed_count += 1
+                if progress_callback:
+                    progress = completed_count / num_images
+                    message = f"Completed {completed_count}/{num_images} images"
+                    progress_callback(progress, message)
+
+            return (index, design_result)
+
+        # Execute tasks in parallel
+        logger.info(f"Starting parallel generation of {num_images} images...")
+
+        with ThreadPoolExecutor(max_workers=min(num_images, 4)) as executor:
+            # Submit all tasks
+            futures = {executor.submit(generate_single_task, i): i for i in range(num_images)}
+
+            # Collect results as they complete
+            for future in as_completed(futures):
+                try:
+                    index, result = future.result()
+                    results[index] = result
+                except Exception as e:
+                    # Get the index for this failed task
+                    index = futures[future]
+                    logger.error(f"Task {index} failed with exception: {e}")
+
+                    # Create error result instead of leaving None
+                    results[index] = {
+                        'image': None,
+                        'image_path': None,
+                        'clip_similarity': 0.0,
+                        'generation_time': 0.0,
+                        'success': False,
+                        'error': f"Task failed: {str(e)}"
+                    }
+
+        # Final summary
+        logger.info(f"✅ Generation complete: {successful_count}/{num_images} successful")
 
         return results
 
