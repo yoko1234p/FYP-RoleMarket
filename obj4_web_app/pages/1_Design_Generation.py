@@ -484,10 +484,11 @@ with col1:
                     }
                     for i, kw in enumerate(manual_keywords)
                 ]
-                st.session_state['selected_keywords'] = []
+                # Directly set as final keywords for Manual Input mode
+                st.session_state['selected_keywords'] = manual_keywords
                 st.session_state['additional_keywords'] = ""
-                st.session_state['final_keywords'] = []
-                st.success(f"✅ Loaded {len(manual_keywords)} manual keywords!")
+                st.session_state['final_keywords'] = manual_keywords
+                st.success(f"✅ Loaded {len(manual_keywords)} manual keywords! Ready for prompt generation.")
                 st.rerun()
             else:
                 st.error("❌ Please enter at least one keyword")
@@ -777,7 +778,7 @@ if st.session_state['selected_keywords']:
     st.markdown("---")
     st.subheader("3️⃣ Adjust Keywords (Optional)")
 
-    st.markdown("**Would you like to add or modify keywords?**")
+    st.markdown("**Would you like to modify or add keywords?**")
 
     col_yes, col_no = st.columns(2)
 
@@ -791,7 +792,29 @@ if st.session_state['selected_keywords']:
         st.session_state['show_adjustment_area'] = True
 
         st.markdown("---")
-        st.markdown("**Add Additional Keywords**")
+
+        # Section 1: Modify Selected Keywords
+        st.markdown("**1️⃣ Review & Modify Selected Keywords**")
+        st.caption("Remove unwanted keywords by deselecting them")
+
+        # Initialize adjusted_selected_keywords if not exists
+        if 'adjusted_selected_keywords' not in st.session_state:
+            st.session_state['adjusted_selected_keywords'] = st.session_state['selected_keywords'].copy()
+
+        # Show multiselect for modifying selected keywords
+        adjusted_selected = st.multiselect(
+            "Selected Keywords (you can remove by deselecting)",
+            options=st.session_state['selected_keywords'],
+            default=st.session_state.get('adjusted_selected_keywords', st.session_state['selected_keywords']),
+            help="Deselect keywords you don't want to use"
+        )
+
+        st.session_state['adjusted_selected_keywords'] = adjusted_selected
+
+        # Section 2: Add Additional Keywords
+        st.markdown("---")
+        st.markdown("**2️⃣ Add Additional Keywords**")
+        st.caption("Add extra keywords not in the extracted list")
 
         additional_input = st.text_area(
             "Additional Keywords (comma separated)",
@@ -803,9 +826,9 @@ if st.session_state['selected_keywords']:
         if st.button("💾 Save Adjustments"):
             st.session_state['additional_keywords'] = additional_input
 
-            # Combine selected + additional
+            # Combine adjusted selected + additional
             additional_list = [kw.strip() for kw in additional_input.split(',') if kw.strip()]
-            st.session_state['final_keywords'] = st.session_state['selected_keywords'] + additional_list
+            st.session_state['final_keywords'] = adjusted_selected + additional_list
 
             st.success(f"✅ Keywords updated! Total: {len(st.session_state['final_keywords'])} keywords")
             st.session_state['show_adjustment_area'] = False
@@ -815,6 +838,9 @@ if st.session_state['selected_keywords']:
         # Use selected keywords as final
         st.session_state['final_keywords'] = st.session_state['selected_keywords'].copy()
         st.session_state['show_adjustment_area'] = False
+        # Reset adjusted keywords
+        if 'adjusted_selected_keywords' in st.session_state:
+            del st.session_state['adjusted_selected_keywords']
         st.success(f"✅ Using {len(st.session_state['final_keywords'])} selected keywords")
 
 
@@ -924,10 +950,13 @@ if st.session_state['generated_prompt']:
     st.markdown("---")
     st.subheader("📝 Generated Prompt")
 
-    # Display in code block
-    st.code(
-        st.session_state['generated_prompt'],
-        language="text"
+    # Display in read-only text area (multi-line)
+    st.text_area(
+        label="Generated Midjourney Prompt",
+        value=st.session_state['generated_prompt'],
+        height=200,
+        disabled=True,
+        label_visibility="collapsed"
     )
 
     # Copy button
@@ -1011,7 +1040,8 @@ if st.session_state['generated_prompt'] and design_generator:
                     reference_image_path=str(selected_ref_path),
                     num_images=num_images,
                     progress_callback=update_progress,
-                    max_retries=3
+                    max_retries=3,
+                    use_multithreading=True  # Enable parallel generation for faster performance
                 )
 
                 # Save to session state
