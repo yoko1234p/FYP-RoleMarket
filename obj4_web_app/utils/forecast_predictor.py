@@ -22,6 +22,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from obj3_lstm_forecast.hybrid_transformer_model import HybridTransformer
 from obj3_lstm_forecast.hybrid_transformer_model_legacy import HybridTransformerLegacy
+from obj3_lstm_forecast.hybrid_transformer_model_exp11v2 import HybridTransformerExp11v2
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +44,19 @@ class ForecastPredictorWrapper:
     提供簡化的 API 供 Streamlit 使用。
     """
 
-    # Model configuration (from Exp #11v2)
-    # Legacy model configuration (compatible with saved model from 2025-10-28)
+    # Experiment #11v2 model configuration (RECOMMENDED)
+    # 延長訓練時間優化（修復輸出）
+    MODEL_CONFIG_EXP11V2 = {
+        'seq_len': 4,
+        'static_dim': 781,
+        'd_model': 64,
+        'nhead': 8,  # Exp11v2 uses 8 attention heads
+        'num_layers': 2,
+        'dim_feedforward': 256,
+        'dropout': 0.3
+    }
+
+    # Legacy model configuration (fallback, compatible with saved model from 2025-10-28)
     MODEL_CONFIG_LEGACY = {
         'ts_input_dim': 1,
         'static_input_dim': 781,  # Old model used 781
@@ -57,7 +69,7 @@ class ForecastPredictorWrapper:
         'fusion_hidden_dim': 128,
         'fusion_hidden_dim_2': 64,
         'dropout': 0.3,
-        'max_seq_len': 4  # Old model used 4
+        'max_seq_len': 4  # Saved model has pe with size 4
     }
 
     # New model configuration (for future retraining)
@@ -124,7 +136,9 @@ class ForecastPredictorWrapper:
         """
         載入訓練好的 Transformer 模型。
 
-        使用舊版模型架構以兼容已訓練的模型檔案。
+        嘗試順序：
+        1. Experiment #11v2 架構（推薦）
+        2. Legacy 架構（fallback）
 
         Returns:
             Loaded model in eval mode
@@ -132,28 +146,79 @@ class ForecastPredictorWrapper:
         Raises:
             ModelLoadError: 當模型載入失敗時
         """
+        # Load state dict first
         try:
-            # Use legacy model architecture (compatible with saved model)
-            logger.info("Loading model with legacy architecture...")
-            model = HybridTransformerLegacy(**self.MODEL_CONFIG_LEGACY)
-
-            # Load weights
             state_dict = torch.load(
                 self.model_path,
-                map_location='cpu',  # Force CPU for compatibility
-                weights_only=True    # Security: only load weights
+                map_location='cpu',
+                weights_only=True
             )
+        except Exception as e:
+            logger.error(f"Failed to load model weights: {e}")
+            raise ModelLoadError(f"模型檔案讀取失敗：{str(e)}")
 
-            # Load state dict directly (architecture matches now)
+        exp11v2_error = None
+        legacy_error = None
+
+        # Try Experiment #11v2 architecture first (RECOMMENDED)
+        try:
+            logger.info("Attempting to load model with Experiment #11v2 architecture...")
+            model = HybridTransformerExp11v2(**self.MODEL_CONFIG_EXP11V2)
             model.load_state_dict(state_dict, strict=True)
             model.eval()
+            logger.info(f"✅ Model loaded from {self.model_path} (Experiment #11v2 architecture)")
+            return model
+        except Exception as e:
+            exp11v2_error = e
+            logger.warning(f"Failed to load with Exp11v2 architecture: {e}")
 
+        # Fallback to Legacy architecture
+        try:
+            logger.info("Falling back to legacy architecture...")
+            model = HybridTransformerLegacy(**self.MODEL_CONFIG_LEGACY)
+
+            # Load with strict=False to allow pe size mismatch
+            missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
+
+            # Handle positional encoding size mismatch
+            if 'pos_encoder.pe' in missing_keys or any('pos_encoder.pe' in str(k) for k in missing_keys):
+                logger.warning("Positional encoding size mismatch, will be handled at runtime")
+
+            # Extend pe buffer if needed (saved pe is [4,1,64], we need at least [5,1,64] for CLS token)
+            saved_pe = state_dict.get('pos_encoder.pe')
+            if saved_pe is not None and saved_pe.size(0) < 5:
+                import math
+                logger.info(f"Extending positional encoding from {saved_pe.size(0)} to 5 positions...")
+
+                # Create extended pe with same structure as saved
+                d_model = saved_pe.size(2)
+                max_len = 5
+                pe_extended = torch.zeros(max_len, 1, d_model)
+
+                # Copy existing positions
+                pe_extended[:saved_pe.size(0), :, :] = saved_pe
+
+                # Generate new position (position 4) using same formula
+                position = torch.tensor([4.0]).unsqueeze(1)
+                div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+                pe_extended[4, 0, 0::2] = torch.sin(position * div_term)
+                pe_extended[4, 0, 1::2] = torch.cos(position * div_term)
+
+                # Replace pe buffer
+                model.pos_encoder.pe = pe_extended
+                logger.info("✅ Positional encoding extended successfully")
+
+            model.eval()
             logger.info(f"✅ Model loaded from {self.model_path} (legacy architecture)")
             return model
-
         except Exception as e:
-            logger.error(f"Failed to load model: {e}")
-            raise ModelLoadError(f"模型載入失敗：{str(e)}")
+            legacy_error = e
+            logger.error(f"Failed to load with legacy architecture: {e}")
+            raise ModelLoadError(
+                f"模型載入失敗：無法匹配 Exp11v2 或 Legacy 架構\n"
+                f"Exp11v2 錯誤: {exp11v2_error}\n"
+                f"Legacy 錯誤: {legacy_error}"
+            )
 
     def _encode_season(self, season: str) -> np.ndarray:
         """

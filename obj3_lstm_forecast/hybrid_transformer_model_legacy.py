@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class PositionalEncodingLegacy(nn.Module):
-    """Positional Encoding for Transformer."""
+    """Positional Encoding for Transformer (legacy format)."""
 
     def __init__(self, d_model: int, max_len: int = 100, dropout: float = 0.1):
         super(PositionalEncodingLegacy, self).__init__()
@@ -30,11 +30,19 @@ class PositionalEncodingLegacy(nn.Module):
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
 
-        pe = pe.unsqueeze(0)  # (1, max_len, d_model)
+        # IMPORTANT: Legacy model uses shape [max_len, 1, d_model] not [1, max_len, d_model]
+        pe = pe.unsqueeze(1)  # (max_len, 1, d_model)
         self.register_buffer('pe', pe)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.pe[:, :x.size(1), :]
+        # x: (batch, seq_len, d_model)
+        # pe: (max_len, 1, d_model)
+        # Need to slice pe to match seq_len and broadcast to batch
+        seq_len = x.size(1)
+        # pe[:seq_len, :, :] -> (seq_len, 1, d_model)
+        # Squeeze middle dim and add batch dim: -> (1, seq_len, d_model)
+        pe_slice = self.pe[:seq_len, 0, :].unsqueeze(0)  # (1, seq_len, d_model)
+        x = x + pe_slice
         return self.dropout(x)
 
 
@@ -90,30 +98,32 @@ class HybridTransformerLegacy(nn.Module):
         self.cls_token = nn.Parameter(torch.randn(1, 1, d_model))
 
         # ============================================================
-        # 靜態特徵分支 (3層架構)
+        # 靜態特徵分支 (層索引必須匹配儲存的模型)
+        # 0, 3, 6 是 Linear 層（與儲存模型的 keys 匹配）
         # ============================================================
         self.static_fc = nn.Sequential(
-            nn.Linear(static_input_dim, static_hidden_dim),  # 0: 781 → 256
-            nn.ReLU(),
-            nn.BatchNorm1d(static_hidden_dim),
-            nn.Linear(static_hidden_dim, static_hidden_dim_2),  # 3: 256 → 128
-            nn.ReLU(),
-            nn.BatchNorm1d(static_hidden_dim_2),
-            nn.Linear(static_hidden_dim_2, d_model),  # 6: 128 → 64
-            nn.ReLU(),
+            nn.Linear(static_input_dim, static_hidden_dim),      # 0: 781 → 256
+            nn.ReLU(),                                           # 1
+            nn.Dropout(dropout),                                 # 2
+            nn.Linear(static_hidden_dim, static_hidden_dim_2),   # 3: 256 → 128
+            nn.ReLU(),                                           # 4
+            nn.Dropout(dropout),                                 # 5
+            nn.Linear(static_hidden_dim_2, d_model),             # 6: 128 → 64
+            nn.ReLU(),                                           # 7
         )
 
         # ============================================================
-        # Fusion 層 (3層架構)
+        # Fusion 層 (層索引必須匹配儲存的模型)
+        # 0, 3, 6 是 Linear 層（與儲存模型的 keys 匹配）
         # ============================================================
         self.fusion_fc = nn.Sequential(
             nn.Linear(d_model + d_model, fusion_hidden_dim),  # 0: 128 → 128
-            nn.ReLU(),
-            nn.Dropout(dropout),
+            nn.ReLU(),                                        # 1
+            nn.Dropout(dropout),                              # 2
             nn.Linear(fusion_hidden_dim, fusion_hidden_dim_2),  # 3: 128 → 64
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(fusion_hidden_dim_2, 1)  # 6: 64 → 1
+            nn.ReLU(),                                        # 4
+            nn.Dropout(dropout),                              # 5
+            nn.Linear(fusion_hidden_dim_2, 1)                 # 6: 64 → 1
         )
 
         logger.info("HybridTransformerLegacy initialized (compatible with old trained model)")
