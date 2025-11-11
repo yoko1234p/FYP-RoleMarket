@@ -1,7 +1,7 @@
 """
 Streamlit Web Application - Main Entry Point
 
-統一 Web 介面整合 Objective 1-3 功能。
+Unified web interface integrating Objectives 1-3 functionality.
 
 Author: Developer (James)
 Date: 2025-11-06
@@ -12,7 +12,7 @@ import streamlit as st
 
 # Page configuration
 st.set_page_config(
-    page_title="AI 角色設計與需求預測系統",
+    page_title="AI Character Design & Demand Forecasting System",
     page_icon="🎨",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -24,39 +24,39 @@ st.markdown("---")
 
 # Welcome message
 st.markdown("""
-## 歡迎使用 ToyzeroPlus AI 設計系統
+## Welcome to ToyzeroPlus AI Design System
 
-本系統整合市場趨勢分析、AI 圖片生成和銷量預測，為角色 IP 設計提供數據驅動的解決方案。
+This system integrates market trend analysis, AI image generation, and sales forecasting to provide data-driven solutions for character IP design.
 
-### 系統功能
+### System Features
 
-**📊 頁面 1: 設計生成**
-- 輸入趨勢關鍵字（如：春節、可愛、紅色）
-- Google Trends 趨勢分析
-- AI Prompt 自動生成
-- Google Gemini 圖片生成（即將推出）
+**📊 Page 1: Design Generation**
+- Input trend keywords (e.g., Chinese New Year, cute, red)
+- Google Trends analysis
+- AI Prompt auto-generation
+- Google Gemini image generation (coming soon)
 
-**📈 頁面 2: 銷量預測**
-- 基於設計圖預測銷量
-- 市場趨勢視覺化
-- 數據驅動決策建議（即將推出）
+**📈 Page 2: Sales Forecasting**
+- Sales prediction based on design images
+- Market trend visualization
+- Data-driven decision recommendations (coming soon)
 
-### 快速開始
+### Quick Start
 
-1. 點擊左側 **"🎨 設計生成"** 開始
-2. 輸入趨勢關鍵字和角色資訊
-3. 查看趨勢分析和生成的 Prompt
+1. Click **"🎨 Design Generation"** on the left sidebar
+2. Enter trend keywords and character information
+3. View trend analysis and generated prompts
 
 ---
 """)
 
 # System status
 st.info("""
-**系統狀態：**
-- ✅ Objective 1: 趨勢分析與 Prompt 生成（已完成）
-- ✅ Objective 2: 圖片生成（已完成）
-- ✅ Objective 3: 銷量預測（已完成）
-- ⏳ Objective 4: Web 整合（開發中 - Story 4.1）
+**System Status:**
+- ✅ Objective 1: Trend Analysis & Prompt Generation (Completed)
+- ✅ Objective 2: Image Generation (Completed)
+- ✅ Objective 3: Sales Forecasting (Completed)
+- ⏳ Objective 4: Web Integration (In Development - Story 4.1)
 """)
 
 # Footer
