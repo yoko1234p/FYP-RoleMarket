@@ -1,3 +1,6 @@
+# Install project as editable package for proper imports
+-e .
+
 # Core AI/ML Libraries
 torch>=2.0.0
 transformers>=4.30.0
@@ -8,7 +11,9 @@ transformers>=4.30.0
 # TTAPI documentation: https://ttapi.io/docs/apiReference/midjourney
 
 # NLP & Trend Analysis
-pytrends>=4.9.0
+pytrends>=4.9.0  # Original (archived 2025-04-17, may have issues)
+trendspy>=0.1.6  # Alternative with better rate limiting
+trendspyg>=0.2.0  # Modern alternative - ultra-fast RSS feed, no rate limiting (RECOMMENDED)
 jieba>=0.42.1
 scikit-learn>=1.3.0
 
@@ -29,6 +34,9 @@ matplotlib>=3.7.0
 python-dotenv>=1.0.0
 requests>=2.31.0
 tqdm>=4.66.0
+
+# Firebase Integration
+firebase-admin>=6.0.0
 
 # Testing (Optional)
 pytest>=7.4.0

@@ -27,6 +27,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from obj4_web_app.utils.enhanced_trends_wrapper import EnhancedTrendsWrapper, EnhancedTrendsError
 from obj4_web_app.utils.design_generator import DesignGeneratorWrapper, DesignGenerationError
+from obj4_web_app.utils.firebase_manager import FirebaseManager, FirebaseError
 from obj4_web_app import config
 from obj4_web_app.config import (
     DEFAULT_REGION,
@@ -183,6 +184,25 @@ def load_design_generator(use_openai_api=True):
             st.info("Image generation will not be available. Please check GEMINI_OPENAI_API_KEY environment variable.")
         else:
             st.info("Image generation will not be available. Please check GEMINI_API_KEY environment variable.")
+        return None
+
+
+@st.cache_resource
+def load_firebase_manager():
+    """
+    Load FirebaseManager (cached across sessions).
+
+    Returns:
+        FirebaseManager instance, or None if initialization fails
+    """
+    try:
+        return FirebaseManager()
+    except FirebaseError as e:
+        st.warning(f"⚠️ Firebase initialization failed: {str(e)}")
+        st.info("Record saving will not be available. Please check Firebase configuration in .env file.")
+        return None
+    except Exception as e:
+        st.warning(f"⚠️ Unexpected error initializing Firebase: {str(e)}")
         return None
 
 
@@ -418,6 +438,7 @@ try:
         headless=headless
     )
     design_generator = load_design_generator(use_openai_api=use_openai_api)
+    firebase_manager = load_firebase_manager()
 except Exception as e:
     st.error(f"❌ System initialization failed: {str(e)}")
     st.stop()
@@ -1060,6 +1081,48 @@ if st.session_state['generated_prompt'] and design_generator:
 
                 # Save to session state
                 st.session_state['generated_images'] = results
+
+                # Upload to Firebase (if available)
+                if firebase_manager:
+                    st.info("📤 Uploading images to Firebase...")
+
+                    for i, result in enumerate(results):
+                        if result.get('success'):
+                            try:
+                                # Upload image to Firebase Storage
+                                upload_result = firebase_manager.upload_image_as_base64(
+                                    image=result['image'],
+                                    folder="designs",
+                                    filename=f"design_{datetime.now().strftime('%Y%m%d_%H%M%S')}_var{i+1}.png"
+                                )
+
+                                # Create design record in Firestore
+                                doc_id = firebase_manager.create_design_record(
+                                    prompt=st.session_state['generated_prompt'],
+                                    keywords=st.session_state['final_keywords'],
+                                    season=st.session_state.get('last_theme', ''),
+                                    reference_image=selected_ref_name,
+                                    image_url=upload_result['download_url'],
+                                    image_storage_path=upload_result['storage_path'],
+                                    clip_similarity=result.get('clip_similarity', 0.0),
+                                    generation_time=result.get('generation_time', 0.0),
+                                    metadata={
+                                        'character_name': st.session_state['last_character_name'],
+                                        'keywords_source': st.session_state.get('last_keywords', ''),
+                                        'variation_index': i + 1
+                                    }
+                                )
+
+                                # Add Firebase info to result
+                                result['firebase_doc_id'] = doc_id
+                                result['firebase_image_url'] = upload_result['download_url']
+
+                            except FirebaseError as e:
+                                st.warning(f"⚠️ Firebase upload failed for image {i+1}: {str(e)}")
+                            except Exception as e:
+                                st.warning(f"⚠️ Unexpected error during Firebase upload for image {i+1}: {str(e)}")
+
+                    st.success("✅ Images uploaded to Firebase successfully!")
 
                 # Clear progress
                 progress_bar.empty()

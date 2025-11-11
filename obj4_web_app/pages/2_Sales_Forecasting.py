@@ -24,6 +24,7 @@ from obj4_web_app.utils.forecast_predictor import (
     ForecastError,
     ModelLoadError
 )
+from obj4_web_app.utils.firebase_manager import FirebaseManager, FirebaseError
 from obj4_web_app.config import (
     ERROR_MESSAGES,
     SUCCESS_MESSAGES,
@@ -61,8 +62,24 @@ def load_forecast_predictor():
         return None
 
 
+# Initialize Firebase Manager (cached)
+@st.cache_resource
+def load_firebase_manager():
+    """Load FirebaseManager (cached across sessions)."""
+    try:
+        return FirebaseManager()
+    except FirebaseError as e:
+        st.warning(f"⚠️ Firebase initialization failed: {str(e)}")
+        st.info("Record saving will not be available. Please check Firebase configuration in .env file.")
+        return None
+    except Exception as e:
+        st.warning(f"⚠️ Unexpected error initializing Firebase: {str(e)}")
+        return None
+
+
 try:
     predictor = load_forecast_predictor()
+    firebase_manager = load_firebase_manager()
 except Exception as e:
     st.error(f"❌ System initialization failed: {str(e)}")
     st.stop()
@@ -200,6 +217,39 @@ if predict_button:
                 'trends_history': trends_history,
                 'clip_similarity': clip_similarity
             })
+
+            # Save to Firebase (if available)
+            if firebase_manager:
+                try:
+                    # Get design_id from Firebase (if available)
+                    design_id = selected_result.get('firebase_doc_id', 'unknown')
+
+                    # Create prediction record
+                    prediction_doc_id = firebase_manager.create_prediction_record(
+                        design_id=design_id,
+                        season=season,
+                        predicted_sales=prediction['predicted_sales'],
+                        lower_bound=prediction['lower_bound'],
+                        upper_bound=prediction['upper_bound'],
+                        confidence=prediction['confidence'],
+                        mae=prediction['mae'],
+                        trends_history=trends_history,
+                        clip_similarity=clip_similarity,
+                        metadata={
+                            'design_idx': selected_design_idx,
+                            'model_version': 'Experiment #11v2'
+                        }
+                    )
+
+                    # Add Firebase doc ID to last prediction
+                    st.session_state['predictions'][-1]['firebase_doc_id'] = prediction_doc_id
+
+                    st.success("✅ Prediction saved to Firebase!")
+
+                except FirebaseError as e:
+                    st.warning(f"⚠️ Failed to save prediction to Firebase: {str(e)}")
+                except Exception as e:
+                    st.warning(f"⚠️ Unexpected error saving to Firebase: {str(e)}")
 
             st.success("✅ Prediction complete!")
 
