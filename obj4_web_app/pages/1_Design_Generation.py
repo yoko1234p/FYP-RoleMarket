@@ -453,39 +453,43 @@ with col1:
         "Extraction Method",
         options=["🔍 Auto Extract (Google Trends)", "✍️ Manual Input"],
         horizontal=True,
-        help="Auto Extract: Extract trending keywords from Google Trends, then generate prompt\nManual Input: Enter complete image generation prompt directly (skip keyword extraction and prompt generation)"
+        help="Auto Extract: Extract trending keywords from Google Trends\nManual Input: Enter keywords manually (skip Google Trends extraction)"
     )
 
     if extraction_method == "✍️ Manual Input":
         # Manual input section
-        st.markdown("**Manual Prompt Input**")
-        st.caption("Enter complete image generation prompt directly. Skip keyword extraction and prompt generation steps.")
+        st.markdown("**Manual Keywords Input**")
+        st.caption("Enter keywords manually to skip Google Trends extraction. The system will still generate a prompt based on your keywords.")
 
-        manual_prompt_input = st.text_area(
-            "Image Generation Prompt",
-            placeholder="e.g., Lulu Pig wearing a cozy Christmas sweater, sitting by a fireplace with hot cocoa, warm lighting, festive decorations, cute and heartwarming scene",
-            help="Enter the complete prompt for image generation",
-            height=150
+        manual_keywords_input = st.text_area(
+            "Keywords (comma-separated)",
+            placeholder="e.g., Christmas, cozy, warm lighting, festive, heartwarming, winter",
+            help="Enter keywords separated by commas. These will be used to generate the prompt.",
+            height=100,
+            key="manual_keywords_input"
         )
 
-        if st.button("✅ Use Manual Prompt", use_container_width=True, type="primary"):
-            if manual_prompt_input.strip():
-                # Directly set as generated prompt (skip keyword extraction and prompt generation)
-                st.session_state['generated_prompt'] = manual_prompt_input.strip()
-                st.session_state['last_keywords'] = "Manual Input"
-                st.session_state['last_character_name'] = character_name
-                st.session_state['last_theme'] = "Manual Prompt"
+        if st.button("✅ Use These Keywords", use_container_width=True, type="primary"):
+            if manual_keywords_input.strip():
+                # Parse keywords
+                keywords = [kw.strip() for kw in manual_keywords_input.split(",") if kw.strip()]
 
-                # Clear keyword-related states (not needed for manual prompt)
-                st.session_state['extracted_trends'] = []
-                st.session_state['selected_keywords'] = []
-                st.session_state['additional_keywords'] = ""
-                st.session_state['final_keywords'] = []
+                if keywords:
+                    # Set final_keywords (skip trend extraction and keyword selection)
+                    st.session_state['final_keywords'] = keywords
+                    st.session_state['extracted_trends'] = []
+                    st.session_state['selected_keywords'] = keywords
+                    st.session_state['additional_keywords'] = ""
 
-                st.success(f"✅ Manual prompt loaded! Check the 📝 Generated Prompt section below to review your prompt.")
-                st.rerun()
+                    # Clear generated prompt (force regeneration with new keywords)
+                    st.session_state['generated_prompt'] = ""
+
+                    st.success(f"✅ {len(keywords)} keywords loaded! Proceed to **4️⃣ Generate Prompt** section below to create your prompt.")
+                    st.rerun()
+                else:
+                    st.error("❌ Please enter at least one keyword")
             else:
-                st.error("❌ Please enter a prompt")
+                st.error("❌ Please enter keywords")
 
     else:
         # Auto extraction section
@@ -944,16 +948,27 @@ if st.session_state['generated_prompt']:
     st.markdown("---")
     st.subheader("📝 Generated Prompt")
 
-    # Display in read-only text area (multi-line)
-    st.text_area(
-        label="Generated Midjourney Prompt",
+    # Editable text area
+    edited_prompt = st.text_area(
+        label="Generated Midjourney Prompt (editable)",
         value=st.session_state['generated_prompt'],
         height=200,
-        disabled=True,
-        label_visibility="collapsed"
+        help="You can edit this prompt before generating images",
+        key="prompt_editor"
     )
 
-    # Copy button
+    # Update prompt button (if changed)
+    if edited_prompt != st.session_state['generated_prompt']:
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("💾 Update Prompt", use_container_width=True):
+                st.session_state['generated_prompt'] = edited_prompt
+                st.success("✅ Prompt updated!")
+                st.rerun()
+        with col2:
+            st.caption("⚠️ Click 'Update Prompt' to save your changes")
+
+    # Download button
     st.download_button(
         label="📋 Download Prompt",
         data=st.session_state['generated_prompt'],
