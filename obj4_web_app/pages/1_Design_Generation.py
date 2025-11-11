@@ -27,6 +27,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from obj4_web_app.utils.enhanced_trends_wrapper import EnhancedTrendsWrapper, EnhancedTrendsError
 from obj4_web_app.utils.design_generator import DesignGeneratorWrapper, DesignGenerationError
+from obj4_web_app import config
 from obj4_web_app.config import (
     DEFAULT_REGION,
     DEFAULT_LANG,
