@@ -15,6 +15,7 @@ import logging
 from PIL import Image
 import time
 import io
+import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
@@ -26,6 +27,7 @@ from obj2_midjourney_api.google_gemini_client import GoogleGeminiImageClient
 from obj2_midjourney_api.gemini_openai_client import GeminiOpenAIImageClient
 from obj2_midjourney_api.character_focused_validator import CharacterFocusedValidator
 from obj2_midjourney_api.prompt_variation_generator import PromptVariationGenerator
+from obj2_midjourney_api.two_stage_generator import TwoStageGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +77,9 @@ class DesignGeneratorWrapper:
         # Initialize PromptVariationGenerator (lazy load)
         self._prompt_generator = None
 
+        # Initialize TwoStageGenerator (lazy load)
+        self._two_stage_generator = None
+
         logger.info("DesignGeneratorWrapper initialized")
 
     @property
@@ -104,6 +109,20 @@ class DesignGeneratorWrapper:
             self._prompt_generator = PromptVariationGenerator()
             logger.info("PromptVariationGenerator loaded")
         return self._prompt_generator
+
+    @property
+    def two_stage_generator(self) -> TwoStageGenerator:
+        """
+        Lazy load TwoStageGenerator.
+
+        Returns:
+            TwoStageGenerator instance
+        """
+        if self._two_stage_generator is None:
+            logger.info("Loading TwoStageGenerator...")
+            self._two_stage_generator = TwoStageGenerator()
+            logger.info("TwoStageGenerator loaded")
+        return self._two_stage_generator
 
     def generate_single_design(
         self,
@@ -179,15 +198,19 @@ class DesignGeneratorWrapper:
         self,
         generated_image: Image.Image,
         reference_image_path: str,
-        strategy: str = "center_crop"
+        strategy: str = "multi"
     ) -> tuple[float, np.ndarray]:
         """
-        計算 CLIP 相似度並提取 embedding。
+        計算 CLIP 相似度並提取 embedding（支援多策略組合評分）。
 
         Args:
             generated_image: 生成的圖片 (PIL Image)
             reference_image_path: Reference Image 路徑
-            strategy: CLIP 驗證策略 (center_crop, background_removal, original)
+            strategy: CLIP 驗證策略
+                - "multi": 多策略加權平均（推薦，提升準確性）
+                - "center_crop": 聚焦中心角色
+                - "background_removal": 去除背景干擾
+                - "original": 完整圖片對比
 
         Returns:
             (similarity, embedding): 相似度分數 (0.0 - 1.0) 和 CLIP embedding (768-dim)
@@ -196,26 +219,51 @@ class DesignGeneratorWrapper:
             CLIPValidationError: 當計算失敗時
         """
         try:
-            logger.info("Computing CLIP similarity and embedding...")
+            logger.info(f"Computing CLIP similarity with strategy: {strategy}")
 
             # Save generated image temporarily for validator
             temp_path = PROJECT_ROOT / "data" / "temp" / "temp_generated.png"
             temp_path.parent.mkdir(parents=True, exist_ok=True)
             generated_image.save(temp_path)
 
-            # Validate with strategy
-            result = self.validator.validate_with_strategy(
-                generated_image_path=str(temp_path),
-                reference_image_path=reference_image_path,
-                strategy=strategy
-            )
+            if strategy == "multi":
+                # 多策略組合評分（提升準確性）
+                strategies_config = {
+                    "center_crop": 0.5,         # 權重 50%：聚焦中心角色
+                    "background_removal": 0.3,  # 權重 30%：去除背景干擾
+                    "original": 0.2             # 權重 20%：完整圖片對比
+                }
 
-            similarity = result['similarity']
+                individual_scores = {}
+                for strat, weight in strategies_config.items():
+                    result = self.validator.validate_with_strategy(
+                        generated_image_path=str(temp_path),
+                        reference_image_path=reference_image_path,
+                        strategy=strat
+                    )
+                    individual_scores[strat] = result['similarity']
 
-            # Extract CLIP embedding from generated image
-            embedding = self.validator.compute_embedding(str(temp_path), use_cache=False)
+                # 計算加權平均
+                similarity = sum(individual_scores[s] * strategies_config[s] for s in strategies_config)
 
-            logger.info(f"CLIP similarity: {similarity:.4f}, embedding shape: {embedding.shape}")
+                logger.info(f"Multi-strategy CLIP scores: {individual_scores}")
+                logger.info(f"Weighted average similarity: {similarity:.4f}")
+            else:
+                # 單一策略
+                result = self.validator.validate_with_strategy(
+                    generated_image_path=str(temp_path),
+                    reference_image_path=reference_image_path,
+                    strategy=strategy
+                )
+                similarity = result['similarity']
+                logger.info(f"Single strategy ({strategy}) similarity: {similarity:.4f}")
+
+            # Extract CLIP embedding from generated image (需要讀取為 PIL Image)
+            # CharacterFocusedValidator.compute_embedding 接受 Image.Image，不是路徑
+            generated_pil = Image.open(temp_path).convert('RGB')
+            embedding = self.validator.compute_embedding(generated_pil)
+
+            logger.info(f"Final CLIP similarity: {similarity:.4f}, embedding shape: {embedding.shape}")
 
             # Cleanup temp file
             temp_path.unlink(missing_ok=True)
@@ -588,3 +636,98 @@ class DesignGeneratorWrapper:
             return 0.0
 
         return sum(similarities) / len(similarities)
+
+    def generate_with_two_stage(
+        self,
+        character_prompt: str,
+        reference_image_path: str,
+        theme_elements: str,
+        theme_description: str,
+        base_filename: Optional[str] = None,
+        compute_clip: bool = True,
+        clip_strategy: str = "multi"
+    ) -> Dict:
+        """
+        使用兩階段策略生成單張設計圖並計算 CLIP 相似度。
+
+        相比一般生成，兩階段策略預期能提升角色一致性：
+        - 一般生成: CLIP Similarity 0.66-0.70
+        - 兩階段生成: 預期 0.75-0.85
+
+        Args:
+            character_prompt: 角色描述 (e.g., "Lulu Pig")
+            reference_image_path: Reference Image 路徑
+            theme_elements: 主題元素 (e.g., "wearing sweater, holding book")
+            theme_description: 場景描述 (e.g., "cozy indoor scene")
+            base_filename: 輸出檔名前綴 (optional)
+            compute_clip: 是否計算 CLIP 相似度 (default: True)
+            clip_strategy: CLIP 驗證策略 (default: "multi")
+
+        Returns:
+            Dictionary containing:
+            {
+                'stage1_image_path': str,
+                'final_image_path': str,
+                'final_image': PIL.Image,
+                'clip_similarity': float (if compute_clip=True),
+                'clip_embedding': np.ndarray (if compute_clip=True),
+                'total_time': float,
+                'success': bool,
+                'stage1_prompt': str,
+                'stage2_prompt': str,
+                'error': str (if failed)
+            }
+
+        Example:
+            >>> wrapper = DesignGeneratorWrapper()
+            >>> result = wrapper.generate_with_two_stage(
+            ...     character_prompt="Lulu Pig",
+            ...     reference_image_path="data/reference_images/lulu_pig_ref_1.jpg",
+            ...     theme_elements="wearing Christmas sweater, reading a book",
+            ...     theme_description="cozy Christmas indoor scene"
+            ... )
+            >>> print(f"CLIP Similarity: {result['clip_similarity']:.4f}")
+            >>> print(f"Expected improvement: 0.66-0.70 → {result['clip_similarity']:.4f}")
+        """
+        logger.info("=== TWO-STAGE DESIGN GENERATION ===")
+
+        # Execute two-stage generation
+        two_stage_result = self.two_stage_generator.generate_two_stage(
+            character_prompt=character_prompt,
+            reference_image_path=reference_image_path,
+            theme_elements=theme_elements,
+            theme_description=theme_description,
+            base_filename=base_filename
+        )
+
+        if not two_stage_result['success']:
+            logger.error("Two-stage generation failed")
+            return {
+                **two_stage_result,
+                'clip_similarity': 0.0,
+                'clip_embedding': None
+            }
+
+        # Compute CLIP similarity if requested
+        clip_similarity = 0.0
+        clip_embedding = None
+
+        if compute_clip:
+            try:
+                clip_similarity, clip_embedding = self.compute_clip_similarity(
+                    generated_image=two_stage_result['final_image'],
+                    reference_image_path=reference_image_path,
+                    strategy=clip_strategy
+                )
+                logger.info(f"CLIP Similarity: {clip_similarity:.4f}")
+
+            except CLIPValidationError as e:
+                logger.warning(f"CLIP validation failed: {e}")
+                clip_similarity = 0.0
+                clip_embedding = None
+
+        return {
+            **two_stage_result,
+            'clip_similarity': clip_similarity,
+            'clip_embedding': clip_embedding
+        }
