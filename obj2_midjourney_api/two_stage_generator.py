@@ -67,7 +67,35 @@ class TwoStageGenerator:
         Returns:
             生成結果字典（包含 local_path, clip_similarity 等）
         """
-        raise NotImplementedError("generate_stage1 未實作")
+        logger.info("=" * 80)
+        logger.info("🎯 Stage 1: 生成極簡基礎角色")
+        logger.info("=" * 80)
+
+        # 構建 Stage 1 極簡 prompt（避免過度裝飾）
+        stage1_prompt = (
+            f"{character_prompt}, exactly as shown in reference image, "
+            f"minimal style, simple clean background, "
+            f"no extra decorations, no accessories, "
+            f"focus on character appearance only, plain lighting"
+        )
+
+        logger.info(f"📝 Character Prompt: {character_prompt}")
+        logger.info(f"🔧 Stage 1 Prompt: {stage1_prompt}")
+        logger.info(f"📷 Reference Image: {reference_image_path}")
+
+        # 使用 Gemini API 生成 Stage 1 圖片
+        result = self.gemini_client.generate(
+            prompt=stage1_prompt,
+            reference_images=[reference_image_path],
+            image_filename=image_filename
+        )
+
+        logger.info(f"✅ Stage 1 生成完成")
+        logger.info(f"   Local Path: {result['local_path']}")
+        logger.info(f"   Duration: {result.get('duration', 0):.2f}s")
+        logger.info(f"   Cost: ${result.get('cost', 0)}")
+
+        return result
 
     def generate_stage2(
         self,

@@ -65,5 +65,55 @@ class TestTwoStageGenerator(unittest.TestCase):
         self.assertTrue(callable(generator.generate_two_stage))
 
 
+    def test_generate_stage1(self):
+        """測試 Stage 1 基礎角色生成"""
+        # 直接導入模組
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "two_stage_generator",
+            PROJECT_ROOT / "obj2_midjourney_api" / "two_stage_generator.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        TwoStageGenerator = module.TwoStageGenerator
+
+        # Mock Gemini client
+        mock_gemini = Mock()
+        mock_gemini.generate.return_value = {
+            'local_path': '/fake/path/stage1.png',
+            'cost': 0.0,
+            'duration': 1.5
+        }
+
+        # Mock validator
+        mock_validator = Mock()
+
+        generator = TwoStageGenerator(
+            gemini_client=mock_gemini,
+            validator=mock_validator
+        )
+
+        # 執行 Stage 1 生成
+        result = generator.generate_stage1(
+            character_prompt="Lulu Pig, pink pig character",
+            reference_image_path="/fake/ref.jpg",
+            image_filename="test_stage1.png"
+        )
+
+        # 驗證結果
+        self.assertIsNotNone(result)
+        self.assertIn('local_path', result)
+        self.assertEqual(result['local_path'], '/fake/path/stage1.png')
+
+        # 驗證 Gemini client 被正確調用
+        mock_gemini.generate.assert_called_once()
+        call_args = mock_gemini.generate.call_args
+
+        # 驗證 prompt 是極簡的（minimal style）
+        self.assertIn('minimal style', call_args[1]['prompt'])
+        self.assertIn('simple clean background', call_args[1]['prompt'])
+        self.assertIn('no extra decorations', call_args[1]['prompt'])
+
+
 if __name__ == '__main__':
     unittest.main()
