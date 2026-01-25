@@ -39,10 +39,12 @@ class TestDesignGeneratorTwoStage:
         assert hasattr(wrapper, 'generate_with_two_stage')
         assert callable(wrapper.generate_with_two_stage)
 
+    @pytest.mark.skipif(
+        not os.getenv("GEMINI_OPENAI_API_KEY"),
+        reason="No API key for integration test"
+    )
     def test_generate_with_two_stage_basic(self, wrapper, reference_image):
         """Test basic two-stage generation (integration test)."""
-        if not os.getenv("GEMINI_OPENAI_API_KEY"):
-            pytest.skip("No API key for integration test")
 
         result = wrapper.generate_with_two_stage(
             character_prompt="Lulu Pig",
