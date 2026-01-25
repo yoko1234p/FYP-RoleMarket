@@ -53,17 +53,40 @@ class TwoStageGenerator:
         # Use preview model for better control
         self.client = GeminiOpenAIImageClient(api_key=api_key, use_preview=True)
 
-        # Output directory for intermediate results
-        self.output_dir = Path("data/two_stage_generations")
+        # Output directory for intermediate results (use absolute path for security)
+        self.output_dir = Path("data/two_stage_generations").resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info("TwoStageGenerator initialized")
+
+    def _validate_filename(self, filename: str) -> str:
+        """
+        Validate filename to prevent path traversal attacks.
+
+        Args:
+            filename: Filename to validate
+
+        Returns:
+            Safe filename
+
+        Raises:
+            ValueError: If filename contains path traversal attempts
+        """
+        # Remove any directory separators
+        safe_filename = Path(filename).name
+
+        # Check for path traversal attempts
+        if '..' in filename or '/' in filename or '\\' in filename:
+            raise ValueError(f"Invalid filename: {filename} (path traversal detected)")
+
+        return safe_filename
 
     def generate_stage1(
         self,
         character_prompt: str,
         reference_image_path: str,
-        output_filename: Optional[str] = None
+        output_filename: Optional[str] = None,
+        template: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Stage 1: Generate minimal base character with high consistency.
@@ -72,6 +95,7 @@ class TwoStageGenerator:
             character_prompt: Character description (e.g., "Lulu Pig")
             reference_image_path: Path to reference image
             output_filename: Custom output filename (optional)
+            template: Custom prompt template (optional, uses default if not provided)
 
         Returns:
             Dictionary containing:
@@ -88,23 +112,31 @@ class TwoStageGenerator:
         start_time = time.time()
 
         # 構建 Stage 1 極簡 prompt（避免過度裝飾）
-        stage1_prompt = (
-            f"{character_prompt}, exactly as shown in reference image, "
-            f"minimal style, simple clean background, "
-            f"no extra decorations, no accessories, "
-            f"focus on character appearance only, plain lighting"
-        )
+        if template:
+            # Use custom template (must include {character_prompt} placeholder)
+            stage1_prompt = template.format(character_prompt=character_prompt)
+        else:
+            # Use default minimal template
+            stage1_prompt = (
+                f"{character_prompt}, exactly as shown in reference image, "
+                f"minimal style, simple clean background, "
+                f"no extra decorations, no accessories, "
+                f"focus on character appearance only, plain lighting"
+            )
 
         logger.info(f"Character prompt: {character_prompt}")
         logger.info(f"Stage 1 prompt: {stage1_prompt}")
         logger.info(f"Reference image: {reference_image_path}")
 
         try:
+            # Validate output filename if provided
+            safe_filename = self._validate_filename(output_filename) if output_filename else None
+
             # 調用 Gemini API
             api_result = self.client.generate(
                 prompt=stage1_prompt,
                 reference_images=[reference_image_path],
-                image_filename=output_filename
+                image_filename=safe_filename
             )
 
             # 載入 PIL Image
@@ -126,7 +158,7 @@ class TwoStageGenerator:
 
         except Exception as e:
             generation_time = time.time() - start_time
-            logger.error(f"Stage 1 generation failed: {str(e)}")
+            logger.error(f"Stage 1 generation failed: {str(e)}", exc_info=True)
 
             return {
                 'image_path': None,
@@ -142,7 +174,8 @@ class TwoStageGenerator:
         stage1_result: Dict[str, Any],
         theme_elements: str,
         theme_description: str,
-        output_filename: Optional[str] = None
+        output_filename: Optional[str] = None,
+        template: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Stage 2: Add theme elements while preserving character.
@@ -152,6 +185,7 @@ class TwoStageGenerator:
             theme_elements: Theme elements (e.g., "Santa hat, gift box")
             theme_description: Scene description (e.g., "Christmas celebration")
             output_filename: Custom output filename (optional)
+            template: Custom prompt template (optional, uses default if not provided)
 
         Returns:
             Dictionary containing:
@@ -181,13 +215,21 @@ class TwoStageGenerator:
         stage1_image_path = stage1_result['image_path']
 
         # 構建 Stage 2 prompt（強調保持角色一致性）
-        stage2_prompt = (
-            f"Based on the character shown in the reference image, "
-            f"keep the character appearance EXACTLY the same, "
-            f"but add the following: {theme_elements}. "
-            f"Scene setting: {theme_description}. "
-            f"IMPORTANT: Do not change the character's face, body shape, or basic features."
-        )
+        if template:
+            # Use custom template (must include {theme_elements} and {theme_description} placeholders)
+            stage2_prompt = template.format(
+                theme_elements=theme_elements,
+                theme_description=theme_description
+            )
+        else:
+            # Use default preservation template
+            stage2_prompt = (
+                f"Based on the character shown in the reference image, "
+                f"keep the character appearance EXACTLY the same, "
+                f"but add the following: {theme_elements}. "
+                f"Scene setting: {theme_description}. "
+                f"IMPORTANT: Do not change the character's face, body shape, or basic features."
+            )
 
         logger.info(f"Theme elements: {theme_elements}")
         logger.info(f"Scene description: {theme_description}")
@@ -195,11 +237,14 @@ class TwoStageGenerator:
         logger.info(f"Stage 1 reference: {stage1_image_path}")
 
         try:
+            # Validate output filename if provided
+            safe_filename = self._validate_filename(output_filename) if output_filename else None
+
             # 使用 Stage 1 圖片作為 reference，生成 Stage 2 圖片
             api_result = self.client.generate(
                 prompt=stage2_prompt,
                 reference_images=[stage1_image_path],
-                image_filename=output_filename
+                image_filename=safe_filename
             )
 
             # 載入 PIL Image
@@ -221,7 +266,7 @@ class TwoStageGenerator:
 
         except Exception as e:
             generation_time = time.time() - start_time
-            logger.error(f"Stage 2 generation failed: {str(e)}")
+            logger.error(f"Stage 2 generation failed: {str(e)}", exc_info=True)
 
             return {
                 'image_path': None,
@@ -238,7 +283,9 @@ class TwoStageGenerator:
         reference_image_path: str,
         theme_elements: str,
         theme_description: str,
-        base_filename: Optional[str] = None
+        base_filename: Optional[str] = None,
+        stage1_template: Optional[str] = None,
+        stage2_template: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Execute full two-stage generation workflow.
@@ -253,6 +300,8 @@ class TwoStageGenerator:
             theme_elements: Elements to add (e.g., "wearing sweater, holding book")
             theme_description: Scene description (e.g., "cozy indoor scene")
             base_filename: Base name for output files (optional)
+            stage1_template: Custom Stage 1 prompt template with {character_prompt} placeholder (optional)
+            stage2_template: Custom Stage 2 prompt template with {theme_elements} and {theme_description} placeholders (optional)
 
         Returns:
             Dictionary containing:
@@ -271,6 +320,21 @@ class TwoStageGenerator:
         logger.info("=== TWO-STAGE GENERATION WORKFLOW ===")
         logger.info("=" * 80)
 
+        # Validate parameters
+        if not character_prompt or not character_prompt.strip():
+            raise ValueError("character_prompt cannot be empty")
+
+        if not theme_elements or not theme_elements.strip():
+            raise ValueError("theme_elements cannot be empty")
+
+        if not theme_description or not theme_description.strip():
+            raise ValueError("theme_description cannot be empty")
+
+        # Validate reference image exists
+        ref_path = Path(reference_image_path)
+        if not ref_path.exists():
+            raise FileNotFoundError(f"Reference image not found: {reference_image_path}")
+
         workflow_start = time.time()
 
         # Generate filenames
@@ -278,15 +342,19 @@ class TwoStageGenerator:
             timestamp = int(time.time())
             base_filename = f"two_stage_{timestamp}"
 
-        stage1_filename = f"{base_filename}_stage1.png"
-        stage2_filename = f"{base_filename}_stage2_final.png"
+        # Validate filename for security
+        safe_base_filename = self._validate_filename(base_filename)
+
+        stage1_filename = f"{safe_base_filename}_stage1.png"
+        stage2_filename = f"{safe_base_filename}_stage2_final.png"
 
         # Execute Stage 1
         logger.info("")
         stage1_result = self.generate_stage1(
             character_prompt=character_prompt,
             reference_image_path=reference_image_path,
-            output_filename=stage1_filename
+            output_filename=stage1_filename,
+            template=stage1_template
         )
 
         if not stage1_result['success']:
@@ -309,7 +377,8 @@ class TwoStageGenerator:
             stage1_result=stage1_result,
             theme_elements=theme_elements,
             theme_description=theme_description,
-            output_filename=stage2_filename
+            output_filename=stage2_filename,
+            template=stage2_template
         )
 
         total_time = time.time() - workflow_start

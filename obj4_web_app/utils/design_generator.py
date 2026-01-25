@@ -645,7 +645,8 @@ class DesignGeneratorWrapper:
         theme_description: str,
         base_filename: Optional[str] = None,
         compute_clip: bool = True,
-        clip_strategy: str = "multi"
+        clip_strategy: str = "multi",
+        cleanup_intermediates: bool = True
     ) -> Dict:
         """
         使用兩階段策略生成單張設計圖並計算 CLIP 相似度。
@@ -662,6 +663,7 @@ class DesignGeneratorWrapper:
             base_filename: 輸出檔名前綴 (optional)
             compute_clip: 是否計算 CLIP 相似度 (default: True)
             clip_strategy: CLIP 驗證策略 (default: "multi")
+            cleanup_intermediates: 是否清理 Stage 1 中間圖片 (default: True)
 
         Returns:
             Dictionary containing:
@@ -725,6 +727,16 @@ class DesignGeneratorWrapper:
                 logger.warning(f"CLIP validation failed: {e}")
                 clip_similarity = 0.0
                 clip_embedding = None
+
+        # Cleanup Stage 1 intermediate image if requested
+        if cleanup_intermediates and two_stage_result.get('stage1_image_path'):
+            try:
+                stage1_path = Path(two_stage_result['stage1_image_path'])
+                if stage1_path.exists():
+                    stage1_path.unlink()
+                    logger.info(f"Cleaned up intermediate image: {stage1_path}")
+            except Exception as e:
+                logger.warning(f"Failed to cleanup intermediate image: {e}")
 
         return {
             **two_stage_result,

@@ -69,8 +69,7 @@ class TestTwoStageCLIPComparison:
         # Store for comparison
         result['clip_similarity'] = similarity
 
-        # Cleanup
-        Path(result['image_path']).unlink(missing_ok=True)
+        # Note: Cleanup handled by caller to avoid premature deletion
 
         return result
 
@@ -99,11 +98,7 @@ class TestTwoStageCLIPComparison:
         print(f"   Expected range: 0.75-0.85")
         print(f"   Improvement target: +0.05 to +0.15")
 
-        # Cleanup
-        if result.get('stage1_image_path'):
-            Path(result['stage1_image_path']).unlink(missing_ok=True)
-        if result.get('final_image_path'):
-            Path(result['final_image_path']).unlink(missing_ok=True)
+        # Note: Cleanup handled by caller to avoid premature deletion
 
         return result
 
@@ -153,9 +148,19 @@ class TestTwoStageCLIPComparison:
 
         print("="*80)
 
-        # Assert improvement (flexible threshold for real-world variance)
+        # Cleanup all generated images
+        try:
+            Path(single_result['image_path']).unlink(missing_ok=True)
+            if two_stage_result.get('stage1_image_path'):
+                Path(two_stage_result['stage1_image_path']).unlink(missing_ok=True)
+            if two_stage_result.get('final_image_path'):
+                Path(two_stage_result['final_image_path']).unlink(missing_ok=True)
+        except Exception as e:
+            print(f"⚠️  Cleanup warning: {e}")
+
+        # Assert improvement (meaningful threshold for real-world variance)
         # We expect at least +0.03 improvement (accounting for API variance)
-        assert improvement >= 0.0, "Two-stage should not decrease CLIP similarity"
+        assert improvement >= 0.03, f"Two-stage should improve CLIP similarity by at least 0.03, got {improvement:.4f}"
 
         return {
             'single_stage': single_clip,

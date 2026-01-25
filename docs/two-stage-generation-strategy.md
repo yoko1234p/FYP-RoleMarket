@@ -92,7 +92,7 @@ wrapper = DesignGeneratorWrapper(use_openai_api=True)
 
 result = wrapper.generate_with_two_stage(
     character_prompt="Lulu Pig",
-    reference_image_path="data/reference_images/lulu_pig_ref_1.jpg",
+    reference_image_path="data/reference_images/lulu_pig_ref_1.png",
     theme_elements="wearing Christmas sweater, reading a book",
     theme_description="cozy Christmas indoor scene with warm lighting",
     compute_clip=True,

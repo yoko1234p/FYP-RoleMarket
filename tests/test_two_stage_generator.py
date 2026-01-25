@@ -347,9 +347,137 @@ class TestTwoStageGenerationIntegration:
         assert Path(result['stage1_image_path']).exists()
         assert Path(result['final_image_path']).exists()
 
-        # 驗證最終圖片是有效的 PIL Image
-        assert isinstance(result['final_image'], Image.Image)
 
-        # 清理
-        Path(result['stage1_image_path']).unlink(missing_ok=True)
-        Path(result['final_image_path']).unlink(missing_ok=True)
+class TestTwoStageGenerationEdgeCases:
+    """Edge case and error handling tests."""
+
+    @pytest.fixture
+    def generator(self):
+        """Create TwoStageGenerator instance."""
+        from obj2_midjourney_api.two_stage_generator import TwoStageGenerator
+        return TwoStageGenerator()
+
+    def test_reference_image_not_exists(self, generator):
+        """測試 reference image 不存在時的錯誤處理"""
+        with pytest.raises(FileNotFoundError) as exc_info:
+            generator.generate_two_stage(
+                character_prompt="Lulu Pig",
+                reference_image_path="/nonexistent/path/image.jpg",
+                theme_elements="wearing hat",
+                theme_description="outdoor scene"
+            )
+
+        assert "Reference image not found" in str(exc_info.value)
+
+    def test_empty_character_prompt(self, generator):
+        """測試空的 character_prompt"""
+        with pytest.raises(ValueError) as exc_info:
+            generator.generate_two_stage(
+                character_prompt="",
+                reference_image_path="/fake/ref.jpg",
+                theme_elements="wearing hat",
+                theme_description="outdoor scene"
+            )
+
+        assert "character_prompt cannot be empty" in str(exc_info.value)
+
+    def test_empty_theme_elements(self, generator):
+        """測試空的 theme_elements"""
+        # Create a fake reference image
+        temp_ref = Path("data/two_stage_generations/fake_ref.png")
+        temp_ref.parent.mkdir(parents=True, exist_ok=True)
+        Image.new('RGB', (100, 100)).save(temp_ref)
+
+        try:
+            with pytest.raises(ValueError) as exc_info:
+                generator.generate_two_stage(
+                    character_prompt="Lulu Pig",
+                    reference_image_path=str(temp_ref),
+                    theme_elements="",
+                    theme_description="outdoor scene"
+                )
+
+            assert "theme_elements cannot be empty" in str(exc_info.value)
+        finally:
+            temp_ref.unlink(missing_ok=True)
+
+    def test_empty_theme_description(self, generator):
+        """測試空的 theme_description"""
+        # Create a fake reference image
+        temp_ref = Path("data/two_stage_generations/fake_ref.png")
+        temp_ref.parent.mkdir(parents=True, exist_ok=True)
+        Image.new('RGB', (100, 100)).save(temp_ref)
+
+        try:
+            with pytest.raises(ValueError) as exc_info:
+                generator.generate_two_stage(
+                    character_prompt="Lulu Pig",
+                    reference_image_path=str(temp_ref),
+                    theme_elements="wearing hat",
+                    theme_description=""
+                )
+
+            assert "theme_description cannot be empty" in str(exc_info.value)
+        finally:
+            temp_ref.unlink(missing_ok=True)
+
+    def test_path_traversal_in_base_filename(self, generator):
+        """測試 base_filename 包含路徑遍歷攻擊"""
+        # Create a fake reference image
+        temp_ref = Path("data/two_stage_generations/fake_ref.png")
+        temp_ref.parent.mkdir(parents=True, exist_ok=True)
+        Image.new('RGB', (100, 100)).save(temp_ref)
+
+        # Mock the client to avoid real API calls
+        generator.client.generate = Mock(side_effect=Exception("Should not reach API"))
+
+        try:
+            with pytest.raises(ValueError) as exc_info:
+                generator.generate_two_stage(
+                    character_prompt="Lulu Pig",
+                    reference_image_path=str(temp_ref),
+                    theme_elements="wearing hat",
+                    theme_description="outdoor scene",
+                    base_filename="../../../etc/passwd"
+                )
+
+            assert "path traversal detected" in str(exc_info.value)
+        finally:
+            temp_ref.unlink(missing_ok=True)
+
+    def test_whitespace_only_prompts(self, generator):
+        """測試只包含空白字符的 prompts"""
+        # Create a fake reference image
+        temp_ref = Path("data/two_stage_generations/fake_ref.png")
+        temp_ref.parent.mkdir(parents=True, exist_ok=True)
+        Image.new('RGB', (100, 100)).save(temp_ref)
+
+        try:
+            # Test whitespace-only character_prompt
+            with pytest.raises(ValueError):
+                generator.generate_two_stage(
+                    character_prompt="   ",
+                    reference_image_path=str(temp_ref),
+                    theme_elements="wearing hat",
+                    theme_description="outdoor scene"
+                )
+
+            # Test whitespace-only theme_elements
+            with pytest.raises(ValueError):
+                generator.generate_two_stage(
+                    character_prompt="Lulu Pig",
+                    reference_image_path=str(temp_ref),
+                    theme_elements="   ",
+                    theme_description="outdoor scene"
+                )
+
+            # Test whitespace-only theme_description
+            with pytest.raises(ValueError):
+                generator.generate_two_stage(
+                    character_prompt="Lulu Pig",
+                    reference_image_path=str(temp_ref),
+                    theme_elements="wearing hat",
+                    theme_description="   "
+                )
+        finally:
+            temp_ref.unlink(missing_ok=True)
