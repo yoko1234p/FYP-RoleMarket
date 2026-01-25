@@ -1035,7 +1035,7 @@ if st.session_state['generated_prompt'] and design_generator:
             st.image(str(selected_ref_path), caption=selected_ref_name, width=300)
 
         # Generation parameters
-        with st.expander("⚙️ Generation Parameters"):
+        with st.expander("⚙️ Generation Parameters", expanded=True):
             # Use default from config (optimized for Cloud if deployed)
             default_num = config.DEFAULT_NUM_IMAGES if hasattr(config, 'DEFAULT_NUM_IMAGES') else 4
 
@@ -1047,6 +1047,46 @@ if st.session_state['generated_prompt'] and design_generator:
                 help=f"Select number of design images to generate (1-4). "
                      f"{'Cloud optimized: 2 images recommended' if config.IS_STREAMLIT_CLOUD else 'Local: 4 images default'}"
             )
+
+            # Prompt Variation Mode
+            st.markdown("**Prompt Variation Mode**")
+            variation_mode = st.radio(
+                "Select variation strategy",
+                options=["single", "preset", "creative"],
+                format_func=lambda x: {
+                    "single": "🎯 Micro Variations (Fast) - Same prompt with slight tweaks",
+                    "preset": "🎨 Theme Scenes (Fast) - Predefined scene library",
+                    "creative": "✨ AI Creative (Slow) - LLM-generated variations"
+                }[x],
+                help="Choose how to generate prompt variations:\n"
+                     "- Single: Same concept, different angles/actions/lighting\n"
+                     "- Preset: Use themed scene library (Christmas, Halloween, etc.)\n"
+                     "- Creative: AI generates creative scene variations (requires API key)",
+                index=0
+            )
+
+            # Preset mode: theme selector
+            preset_theme = None
+            if variation_mode == "preset":
+                preset_themes = [
+                    "Christmas", "Halloween", "Chinese New Year", "Valentine's Day",
+                    "Easter", "Thanksgiving", "New Year", "Birthday",
+                    "Summer", "Winter", "Autumn", "Spring"
+                ]
+                preset_theme = st.selectbox(
+                    "Select Theme",
+                    options=preset_themes,
+                    help="Choose a preset theme for scene variations"
+                )
+
+            # Creative mode: additional options
+            creative_theme = None
+            if variation_mode == "creative":
+                creative_theme = st.text_input(
+                    "Creative Theme",
+                    value=st.session_state.get('last_theme', 'celebration'),
+                    help="Describe the creative theme (e.g., 'celebration', 'festive', 'party')"
+                )
 
         # Generate Images button
         generate_images_button = st.button(
@@ -1070,13 +1110,24 @@ if st.session_state['generated_prompt'] and design_generator:
 
             # Generate designs
             try:
+                # Prepare variation parameters
+                theme_param = None
+                if variation_mode == "preset":
+                    theme_param = preset_theme
+                elif variation_mode == "creative":
+                    theme_param = creative_theme
+
                 results = design_generator.generate_designs(
                     prompt=st.session_state['generated_prompt'],
                     reference_image_path=str(selected_ref_path),
                     num_images=num_images,
                     progress_callback=update_progress,
                     max_retries=3,
-                    use_multithreading=True  # Enable parallel generation for faster performance
+                    use_multithreading=True,  # Enable parallel generation for faster performance
+                    variation_mode=variation_mode,
+                    theme=theme_param,
+                    character_name=st.session_state.get('last_character_name', 'Character'),
+                    character_desc=st.session_state.get('character_description', None)
                 )
 
                 # Save to session state

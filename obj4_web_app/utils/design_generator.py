@@ -25,6 +25,7 @@ sys.path.append(str(PROJECT_ROOT))
 from obj2_midjourney_api.google_gemini_client import GoogleGeminiImageClient
 from obj2_midjourney_api.gemini_openai_client import GeminiOpenAIImageClient
 from obj2_midjourney_api.character_focused_validator import CharacterFocusedValidator
+from obj2_midjourney_api.prompt_variation_generator import PromptVariationGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,9 @@ class DesignGeneratorWrapper:
         # Initialize CLIP validator (lazy load)
         self._validator = None
 
+        # Initialize PromptVariationGenerator (lazy load)
+        self._prompt_generator = None
+
         logger.info("DesignGeneratorWrapper initialized")
 
     @property
@@ -86,6 +90,20 @@ class DesignGeneratorWrapper:
             self._validator = CharacterFocusedValidator()
             logger.info("CLIP model loaded")
         return self._validator
+
+    @property
+    def prompt_generator(self) -> PromptVariationGenerator:
+        """
+        Lazy load PromptVariationGenerator.
+
+        Returns:
+            PromptVariationGenerator instance
+        """
+        if self._prompt_generator is None:
+            logger.info("Loading PromptVariationGenerator...")
+            self._prompt_generator = PromptVariationGenerator()
+            logger.info("PromptVariationGenerator loaded")
+        return self._prompt_generator
 
     def generate_single_design(
         self,
@@ -215,18 +233,29 @@ class DesignGeneratorWrapper:
         num_images: int = 4,
         progress_callback: Optional[Callable[[float, str], None]] = None,
         max_retries: int = 3,
-        use_multithreading: bool = True
+        use_multithreading: bool = True,
+        variation_mode: str = "single",
+        theme: Optional[str] = None,
+        character_name: Optional[str] = None,
+        character_desc: Optional[str] = None
     ) -> List[Dict]:
         """
-        生成多張設計圖並計算 CLIP 相似度。
+        生成多張設計圖並計算 CLIP 相似度（支援 3 種 variation 模式）。
 
         Args:
-            prompt: 設計 Prompt
+            prompt: 設計 Prompt（base prompt）
             reference_image_path: Reference Image 路徑
             num_images: 生成數量 (1-4)
             progress_callback: 進度回調函數 (progress: float, message: str)
             max_retries: 最大重試次數
             use_multithreading: 使用多線程並行生成 (default: True)
+            variation_mode: Variation 模式 ("single", "preset", "creative")
+                - "single": 同一個 prompt，微小變化（原有模式）
+                - "preset": 預設場景配置（基於主題庫）
+                - "creative": AI 自動生成場景變化
+            theme: 主題（用於 preset/creative mode）
+            character_name: 角色名稱（用於 creative mode）
+            character_desc: 角色描述（用於 creative mode）
 
         Returns:
             List[Dict]: [
@@ -236,6 +265,7 @@ class DesignGeneratorWrapper:
                     'clip_similarity': float,
                     'generation_time': float,
                     'success': bool,
+                    'prompt_used': str,  # 實際使用的 prompt
                     'error': str (if failed)
                 },
                 ...
@@ -243,39 +273,103 @@ class DesignGeneratorWrapper:
 
         Example:
             >>> wrapper = DesignGeneratorWrapper()
+            >>> # Single mode (原有方式)
             >>> results = wrapper.generate_designs(
             ...     prompt="Lulu Pig celebrating Spring Festival",
             ...     reference_image_path="data/reference_images/lulu_pig_ref_1.jpg",
             ...     num_images=4,
-            ...     progress_callback=lambda p, m: print(f"{int(p*100)}%: {m}")
+            ...     variation_mode="single"
             ... )
-            >>> for i, result in enumerate(results):
-            ...     if result['success']:
-            ...         print(f"Image {i+1}: CLIP = {result['clip_similarity']:.4f}")
+            >>> # Preset mode
+            >>> results = wrapper.generate_designs(
+            ...     prompt="Lulu Pig celebrating",
+            ...     reference_image_path="data/reference_images/lulu_pig_ref_1.jpg",
+            ...     num_images=4,
+            ...     variation_mode="preset",
+            ...     theme="Christmas"
+            ... )
+            >>> # Creative mode
+            >>> results = wrapper.generate_designs(
+            ...     prompt="Lulu Pig celebrating Chinese New Year",
+            ...     reference_image_path="data/reference_images/lulu_pig_ref_1.jpg",
+            ...     num_images=4,
+            ...     variation_mode="creative",
+            ...     theme="Chinese New Year",
+            ...     character_name="Lulu Pig",
+            ...     character_desc="Cute pink pig"
+            ... )
         """
         if not 1 <= num_images <= 4:
             raise ValueError("num_images must be between 1 and 4")
 
+        # Generate prompt variations based on mode
+        logger.info(f"Variation mode: {variation_mode}")
+
+        if variation_mode == "single":
+            # Original behavior: use same prompt for all images
+            # But add micro variations for diversity
+            prompt_variations = self.prompt_generator.generate_variations(
+                base_prompt=prompt,
+                mode="single",
+                num_variations=num_images
+            )
+        elif variation_mode == "preset":
+            # Preset scenes from theme library
+            if not theme:
+                logger.warning("⚠️ Theme not provided for preset mode, falling back to single mode")
+                prompt_variations = [prompt] * num_images
+            else:
+                prompt_variations = self.prompt_generator.generate_variations(
+                    base_prompt=prompt,
+                    mode="preset",
+                    theme=theme,
+                    num_variations=num_images
+                )
+        elif variation_mode == "creative":
+            # AI-generated scene variations
+            if not theme:
+                logger.warning("⚠️ Theme not provided for creative mode, falling back to single mode")
+                prompt_variations = [prompt] * num_images
+            else:
+                prompt_variations = self.prompt_generator.generate_variations(
+                    base_prompt=prompt,
+                    mode="creative",
+                    theme=theme,
+                    character_name=character_name,
+                    character_desc=character_desc,
+                    num_variations=num_images
+                )
+        else:
+            # Fallback: use original prompt for all
+            logger.warning(f"⚠️ Unknown variation mode '{variation_mode}', using original prompt")
+            prompt_variations = [prompt] * num_images
+
+        logger.info(f"✅ Generated {len(prompt_variations)} prompt variations")
+
+        # Log prompt variations for debugging
+        for i, var_prompt in enumerate(prompt_variations, 1):
+            logger.info(f"Variation {i}: {var_prompt[:100]}...")
+
         if use_multithreading:
             return self._generate_designs_parallel(
-                prompt, reference_image_path, num_images,
+                prompt_variations, reference_image_path, num_images,
                 progress_callback, max_retries
             )
         else:
             return self._generate_designs_sequential(
-                prompt, reference_image_path, num_images,
+                prompt_variations, reference_image_path, num_images,
                 progress_callback, max_retries
             )
 
     def _generate_designs_sequential(
         self,
-        prompt: str,
+        prompt_variations: List[str],
         reference_image_path: str,
         num_images: int,
         progress_callback: Optional[Callable[[float, str], None]],
         max_retries: int
     ) -> List[Dict]:
-        """Sequential generation (original implementation)."""
+        """Sequential generation (with prompt variations)."""
         results = []
         successful_count = 0
 
@@ -290,13 +384,19 @@ class DesignGeneratorWrapper:
             timestamp = int(time.time())
             filename = f"design_{timestamp}_var{i+1}.png"
 
+            # Get prompt for this variation
+            prompt_to_use = prompt_variations[i] if i < len(prompt_variations) else prompt_variations[0]
+
             # Generate design
             design_result = self.generate_single_design(
-                prompt=prompt,
+                prompt=prompt_to_use,
                 reference_image_path=reference_image_path,
                 output_filename=filename,
                 max_retries=max_retries
             )
+
+            # Add the prompt used to the result
+            design_result['prompt_used'] = prompt_to_use
 
             if design_result['success']:
                 # Compute CLIP similarity and extract embedding
@@ -331,14 +431,14 @@ class DesignGeneratorWrapper:
 
     def _generate_designs_parallel(
         self,
-        prompt: str,
+        prompt_variations: List[str],
         reference_image_path: str,
         num_images: int,
         progress_callback: Optional[Callable[[float, str], None]],
         max_retries: int
     ) -> List[Dict]:
         """
-        Parallel generation using ThreadPoolExecutor.
+        Parallel generation using ThreadPoolExecutor (with prompt variations).
 
         Generates multiple images concurrently for faster performance.
         """
@@ -355,6 +455,9 @@ class DesignGeneratorWrapper:
             timestamp = int(time.time())
             filename = f"design_{timestamp}_var{index+1}.png"
 
+            # Get prompt for this variation
+            prompt_to_use = prompt_variations[index] if index < len(prompt_variations) else prompt_variations[0]
+
             # Update progress - starting
             if progress_callback:
                 try:
@@ -368,11 +471,14 @@ class DesignGeneratorWrapper:
 
             # Generate design
             design_result = self.generate_single_design(
-                prompt=prompt,
+                prompt=prompt_to_use,
                 reference_image_path=reference_image_path,
                 output_filename=filename,
                 max_retries=max_retries
             )
+
+            # Add the prompt used to the result
+            design_result['prompt_used'] = prompt_to_use
 
             if design_result['success']:
                 # Compute CLIP similarity and extract embedding
