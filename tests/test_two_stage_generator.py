@@ -115,5 +115,64 @@ class TestTwoStageGenerator(unittest.TestCase):
         self.assertIn('no extra decorations', call_args[1]['prompt'])
 
 
+    def test_generate_stage2(self):
+        """測試 Stage 2 主題元素添加"""
+        # 直接導入模組
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "two_stage_generator",
+            PROJECT_ROOT / "obj2_midjourney_api" / "two_stage_generator.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        TwoStageGenerator = module.TwoStageGenerator
+
+        # Mock Gemini client
+        mock_gemini = Mock()
+        mock_gemini.generate.return_value = {
+            'local_path': '/fake/path/stage2.png',
+            'cost': 0.0,
+            'duration': 2.0
+        }
+
+        # Mock validator
+        mock_validator = Mock()
+
+        generator = TwoStageGenerator(
+            gemini_client=mock_gemini,
+            validator=mock_validator
+        )
+
+        # 執行 Stage 2 生成
+        result = generator.generate_stage2(
+            stage1_image_path="/fake/stage1.png",
+            theme_elements="Santa hat, Christmas tree, gift boxes",
+            theme_description="Cozy Christmas celebration at home",
+            image_filename="test_stage2.png"
+        )
+
+        # 驗證結果
+        self.assertIsNotNone(result)
+        self.assertIn('local_path', result)
+        self.assertEqual(result['local_path'], '/fake/path/stage2.png')
+
+        # 驗證 Gemini client 被正確調用
+        mock_gemini.generate.assert_called_once()
+        call_args = mock_gemini.generate.call_args
+
+        # 驗證使用 Stage 1 圖片作為 reference
+        self.assertEqual(call_args[1]['reference_images'], ["/fake/stage1.png"])
+
+        # 驗證 prompt 包含主題元素和場景描述
+        prompt = call_args[1]['prompt']
+        self.assertIn('Santa hat', prompt)
+        self.assertIn('Christmas tree', prompt)
+        self.assertIn('Cozy Christmas celebration', prompt)
+
+        # 驗證 prompt 強調保持角色一致性
+        self.assertIn('keep the character appearance EXACTLY the same', prompt)
+        self.assertIn('Do not change', prompt)
+
+
 if __name__ == '__main__':
     unittest.main()

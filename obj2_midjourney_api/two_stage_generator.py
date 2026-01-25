@@ -116,7 +116,37 @@ class TwoStageGenerator:
         Returns:
             生成結果字典（包含 local_path, clip_similarity 等）
         """
-        raise NotImplementedError("generate_stage2 未實作")
+        logger.info("=" * 80)
+        logger.info("🎨 Stage 2: 添加主題元素")
+        logger.info("=" * 80)
+
+        # 構建 Stage 2 prompt（強調保持角色一致性）
+        stage2_prompt = (
+            f"Based on the character shown in the reference image, "
+            f"keep the character appearance EXACTLY the same, "
+            f"but add the following: {theme_elements}. "
+            f"Scene setting: {theme_description}. "
+            f"IMPORTANT: Do not change the character's face, body shape, or basic features."
+        )
+
+        logger.info(f"🎯 Theme Elements: {theme_elements}")
+        logger.info(f"🏞️  Scene Description: {theme_description}")
+        logger.info(f"🔧 Stage 2 Prompt: {stage2_prompt}")
+        logger.info(f"📷 Stage 1 Reference: {stage1_image_path}")
+
+        # 使用 Stage 1 圖片作為 reference，生成 Stage 2 圖片
+        result = self.gemini_client.generate(
+            prompt=stage2_prompt,
+            reference_images=[stage1_image_path],
+            image_filename=image_filename
+        )
+
+        logger.info(f"✅ Stage 2 生成完成")
+        logger.info(f"   Local Path: {result['local_path']}")
+        logger.info(f"   Duration: {result.get('duration', 0):.2f}s")
+        logger.info(f"   Cost: ${result.get('cost', 0)}")
+
+        return result
 
     def generate_two_stage(
         self,
