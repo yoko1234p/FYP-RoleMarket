@@ -238,21 +238,111 @@ class TwoStageGenerator:
         reference_image_path: str,
         theme_elements: str,
         theme_description: str,
-        stage1_filename: Optional[str] = None,
-        stage2_filename: Optional[str] = None
+        base_filename: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        完整兩階段生成流程
+        Execute full two-stage generation workflow.
+
+        Workflow:
+        1. Generate minimal base character (Stage 1)
+        2. Add theme elements using Stage 1 as reference (Stage 2)
 
         Args:
-            character_prompt: 角色描述
-            reference_image_path: 原始參考圖路徑
-            theme_elements: 主題元素描述
-            theme_description: 場景描述
-            stage1_filename: Stage 1 檔名（可選）
-            stage2_filename: Stage 2 檔名（可選）
+            character_prompt: Character description (e.g., "Lulu Pig")
+            reference_image_path: Path to original reference image
+            theme_elements: Elements to add (e.g., "wearing sweater, holding book")
+            theme_description: Scene description (e.g., "cozy indoor scene")
+            base_filename: Base name for output files (optional)
 
         Returns:
-            包含兩階段結果的字典
+            Dictionary containing:
+            {
+                'stage1_image_path': str,
+                'final_image_path': str,
+                'final_image': PIL.Image,
+                'total_time': float,
+                'success': bool,
+                'stage1_prompt': str,
+                'stage2_prompt': str,
+                'error': str (if failed)
+            }
         """
-        raise NotImplementedError("generate_two_stage 未實作")
+        logger.info("=" * 80)
+        logger.info("=== TWO-STAGE GENERATION WORKFLOW ===")
+        logger.info("=" * 80)
+
+        workflow_start = time.time()
+
+        # Generate filenames
+        if not base_filename:
+            timestamp = int(time.time())
+            base_filename = f"two_stage_{timestamp}"
+
+        stage1_filename = f"{base_filename}_stage1.png"
+        stage2_filename = f"{base_filename}_stage2_final.png"
+
+        # Execute Stage 1
+        logger.info("")
+        stage1_result = self.generate_stage1(
+            character_prompt=character_prompt,
+            reference_image_path=reference_image_path,
+            output_filename=stage1_filename
+        )
+
+        if not stage1_result['success']:
+            total_time = time.time() - workflow_start
+            logger.error("Workflow failed at Stage 1")
+            return {
+                'stage1_image_path': None,
+                'final_image_path': None,
+                'final_image': None,
+                'total_time': total_time,
+                'success': False,
+                'stage1_prompt': stage1_result.get('prompt_used', ''),
+                'stage2_prompt': '',
+                'error': f"Stage 1 failed: {stage1_result.get('error', 'Unknown error')}"
+            }
+
+        # Execute Stage 2
+        logger.info("")
+        stage2_result = self.generate_stage2(
+            stage1_result=stage1_result,
+            theme_elements=theme_elements,
+            theme_description=theme_description,
+            output_filename=stage2_filename
+        )
+
+        total_time = time.time() - workflow_start
+
+        if not stage2_result['success']:
+            logger.error("Workflow failed at Stage 2")
+            return {
+                'stage1_image_path': stage1_result['image_path'],
+                'final_image_path': None,
+                'final_image': None,
+                'total_time': total_time,
+                'success': False,
+                'stage1_prompt': stage1_result['prompt_used'],
+                'stage2_prompt': stage2_result.get('prompt_used', ''),
+                'error': f"Stage 2 failed: {stage2_result.get('error', 'Unknown error')}"
+            }
+
+        # Workflow complete
+        logger.info("")
+        logger.info("=" * 80)
+        logger.info(f"TWO-STAGE WORKFLOW COMPLETE in {total_time:.2f}s")
+        logger.info(f"   Stage 1 time: {stage1_result['generation_time']:.2f}s")
+        logger.info(f"   Stage 2 time: {stage2_result['generation_time']:.2f}s")
+        logger.info(f"   Stage 1 image: {stage1_result['image_path']}")
+        logger.info(f"   Final image: {stage2_result['image_path']}")
+        logger.info("=" * 80)
+
+        return {
+            'stage1_image_path': stage1_result['image_path'],
+            'final_image_path': stage2_result['image_path'],
+            'final_image': stage2_result['image'],
+            'total_time': total_time,
+            'success': True,
+            'stage1_prompt': stage1_result['prompt_used'],
+            'stage2_prompt': stage2_result['prompt_used']
+        }

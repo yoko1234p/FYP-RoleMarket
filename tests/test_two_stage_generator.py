@@ -305,3 +305,51 @@ class TestTwoStageGenerationIntegration:
         assert Path(stage2_result['image_path']).exists()
         assert isinstance(stage2_result['image'], Image.Image)
         assert stage2_result['generation_time'] > 0
+
+    def test_generate_two_stage_workflow(self, reference_image):
+        """測試完整兩階段工作流（需要真實 API）"""
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        if not os.getenv("GEMINI_OPENAI_API_KEY"):
+            pytest.skip("No API key for integration test")
+
+        from obj2_midjourney_api.two_stage_generator import TwoStageGenerator
+
+        generator = TwoStageGenerator()
+        result = generator.generate_two_stage(
+            character_prompt="Lulu Pig",
+            reference_image_path=reference_image,
+            theme_elements="wearing cozy sweater, reading a book",
+            theme_description="warm library scene with soft lighting",
+            base_filename="test_two_stage_workflow"
+        )
+
+        # 驗證成功狀態
+        assert result['success'] is True
+
+        # 驗證兩階段都完成
+        assert 'stage1_image_path' in result
+        assert 'final_image_path' in result
+        assert 'final_image' in result
+
+        # 驗證時間追蹤
+        assert result['total_time'] > 0
+
+        # 驗證 prompts
+        assert 'stage1_prompt' in result
+        assert 'stage2_prompt' in result
+        assert 'minimal' in result['stage1_prompt'].lower()
+        assert 'sweater' in result['stage2_prompt'].lower()
+
+        # 驗證圖片存在
+        assert Path(result['stage1_image_path']).exists()
+        assert Path(result['final_image_path']).exists()
+
+        # 驗證最終圖片是有效的 PIL Image
+        assert isinstance(result['final_image'], Image.Image)
+
+        # 清理
+        Path(result['stage1_image_path']).unlink(missing_ok=True)
+        Path(result['final_image_path']).unlink(missing_ok=True)
