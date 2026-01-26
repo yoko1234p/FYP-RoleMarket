@@ -41,7 +41,7 @@ def render_step_card(
         with st.container():
             col1, col2 = st.columns([6, 1])
             with col1:
-                st.markdown(f"""
+                st.html(f"""
                 <div class="step-card completed">
                     <div class="step-card-header">
                         <span class="step-card-title">
@@ -51,7 +51,7 @@ def render_step_card(
                     </div>
                     <div class="step-card-summary">{summary or ''}</div>
                 </div>
-                """, unsafe_allow_html=True)
+                """)
             with col2:
                 if on_edit:
                     if st.button("編輯", key=on_edit, use_container_width=True):
@@ -60,7 +60,7 @@ def render_step_card(
 
     elif state == 'active':
         # Expanded card - content rendered by caller
-        st.markdown(f"""
+        st.html(f"""
         <div class="step-card active">
             <div class="step-card-header">
                 <span class="step-card-title">
@@ -69,12 +69,12 @@ def render_step_card(
                 </span>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """)
         return True  # Caller should render content
 
     else:  # pending
         # Locked card
-        st.markdown(f"""
+        st.html(f"""
         <div class="step-card pending">
             <div class="step-card-header">
                 <span class="step-card-title">
@@ -84,7 +84,7 @@ def render_step_card(
                 <span style="color: #9E9E9E;">🔒</span>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """)
         return False
 
 

@@ -51,7 +51,7 @@ def render_stepper(current_step: int, completed_steps: List[int]) -> None:
     </div>
     """
 
-    st.markdown(stepper_html, unsafe_allow_html=True)
+    st.html(stepper_html)
 
 
 def get_step_label(step_num: int) -> str:
