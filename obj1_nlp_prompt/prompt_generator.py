@@ -118,6 +118,8 @@ class PromptGenerator:
         # Format keywords
         keywords_str = ', '.join(keywords[:5])  # Use top 5 keywords
 
+        logger.info(f"  → Using keywords: {keywords_str}")
+
         # Fill template
         filled_template = self.template.format(
             character_description=self.character_desc,
@@ -134,16 +136,31 @@ class PromptGenerator:
         try:
             start_time = time.time()
 
+            # Enhanced system prompt with keyword enforcement
+            system_prompt = (
+                "You are a creative prompt engineer specializing in Midjourney prompts for character IP designs. "
+                "⚠️ CRITICAL: You MUST incorporate the provided trending keywords into the scene/costume/props. "
+                "The trending keywords are the CORE requirement - they represent current market trends that MUST be visible in the design. "
+                "Blend them naturally with the seasonal theme, but keywords take PRIORITY over generic seasonal elements. "
+                "Generate concise, vivid prompts that maintain character consistency while incorporating both trending keywords and seasonal elements."
+            )
+
+            # Add keyword emphasis at the beginning of user content
+            keyword_reminder = (
+                f"🔥 MANDATORY KEYWORDS TO INTEGRATE: {keywords_str}\n"
+                f"⚠️ These keywords MUST appear in your prompt through costume/props/scene elements.\n\n"
+            )
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
                         'role': 'system',
-                        'content': 'You are a creative prompt engineer specializing in Midjourney prompts for character IP designs. Generate concise, vivid prompts that maintain character consistency while incorporating seasonal elements.'
+                        'content': system_prompt
                     },
                     {
                         'role': 'user',
-                        'content': filled_template
+                        'content': keyword_reminder + filled_template
                     }
                 ],
                 max_tokens=200,
@@ -208,12 +225,16 @@ class PromptGenerator:
 
             prompt = self.generate_prompt(theme, keywords, variation_hint=hint)
 
-            # Validate prompt
-            is_valid, validation_msg = self._validate_prompt(prompt, theme)
+            # Validate prompt (including keyword usage)
+            is_valid, validation_msg = self._validate_prompt(prompt, theme, keywords)
             if not is_valid:
                 logger.warning(f"Validation failed for {theme} variation {i+1}: {validation_msg}")
                 # Retry once
                 prompt = self.generate_prompt(theme, keywords, variation_hint=hint)
+                # Re-validate after retry
+                is_valid, validation_msg = self._validate_prompt(prompt, theme, keywords)
+                if not is_valid:
+                    logger.warning(f"Retry also failed validation: {validation_msg}")
 
             variations.append({
                 'theme': theme,
@@ -289,13 +310,14 @@ class PromptGenerator:
 
         logger.info(f"Saved {len(prompts)} prompts for {theme} to: {output_dir}")
 
-    def _validate_prompt(self, prompt: str, theme: str) -> tuple[bool, str]:
+    def _validate_prompt(self, prompt: str, theme: str, keywords: List[str] = None) -> tuple[bool, str]:
         """
         Validate generated prompt quality.
 
         Args:
             prompt: Generated prompt string
             theme: Theme name
+            keywords: List of trending keywords that should be integrated
 
         Returns:
             (is_valid, validation_message)
@@ -311,6 +333,42 @@ class PromptGenerator:
         # Check for character mention (Lulu or pig)
         if 'lulu' not in prompt.lower() and 'pig' not in prompt.lower():
             return False, "Missing character reference"
+
+        # Check for keyword usage (CRITICAL for trend-driven designs)
+        if keywords and len(keywords) > 0:
+            prompt_lower = prompt.lower()
+            keywords_found = []
+            keywords_missing = []
+
+            for kw in keywords[:5]:  # Check top 5 keywords
+                # Simple keyword matching (check for partial matches)
+                kw_parts = kw.lower().split()
+                found = False
+
+                for part in kw_parts:
+                    if len(part) >= 2 and part in prompt_lower:
+                        found = True
+                        break
+
+                if found:
+                    keywords_found.append(kw)
+                else:
+                    keywords_missing.append(kw)
+
+            # Require at least 40% of keywords to be present (2 out of 5, or 1 out of 2)
+            if len(keywords) <= 2:
+                min_required = 1  # At least 1 keyword for 1-2 keywords
+            else:
+                min_required = max(2, int(len(keywords[:5]) * 0.4))  # At least 40%
+
+            if len(keywords_found) < min_required:
+                return False, (
+                    f"Missing trending keywords: Found {len(keywords_found)}/{len(keywords[:5])} keywords. "
+                    f"Found: {', '.join(keywords_found) if keywords_found else 'None'}. "
+                    f"Missing: {', '.join(keywords_missing[:3])}"
+                )
+
+            logger.info(f"  ✅ Keyword validation passed: {len(keywords_found)}/{len(keywords[:5])} keywords found")
 
         # Check for theme mention
         if theme.lower() not in prompt.lower():
@@ -459,6 +517,56 @@ class PromptGenerator:
             keywords_dict[theme_name] = df
             logger.info(f"Loaded {len(df)} keywords from: {csv_file}")
 
+        return keywords_dict
+
+    def load_seasonal_keywords(
+        self,
+        themes: List[str],
+        use_seasonal: bool = True,
+        top_n: int = 20,
+        output_dir: str = 'data/trends_seasonal'
+    ) -> Dict[str, pd.DataFrame]:
+        """
+        使用 SeasonalTrendsExtractor 提取季節性關鍵字.
+
+        Args:
+            themes: 主題列表
+            use_seasonal: 是否使用季節性時段（True=seasonal, False=12-month average）
+            top_n: 每個主題的關鍵字數量
+            output_dir: 輸出目錄
+
+        Returns:
+            Dictionary mapping theme to keywords DataFrame
+
+        Example:
+            >>> generator = PromptGenerator()
+            >>> seasonal_keywords = generator.load_seasonal_keywords(
+            ...     themes=['Christmas', 'Halloween'],
+            ...     use_seasonal=True
+            ... )
+        """
+        if use_seasonal:
+            logger.info("使用 SeasonalTrendsExtractor 提取季節性關鍵字")
+            from obj1_nlp_prompt.seasonal_trends_extractor import SeasonalTrendsExtractor
+
+            extractor = SeasonalTrendsExtractor()
+            keywords_dict = extractor.extract_all_themes_seasonal(
+                themes=themes,
+                top_n=top_n,
+                output_dir=output_dir
+            )
+        else:
+            logger.info("使用標準 TrendsExtractor 提取 12 個月平均關鍵字")
+            from obj1_nlp_prompt.trends_extractor import TrendsExtractor
+
+            extractor = TrendsExtractor()
+            keywords_dict = extractor.extract_all_themes(
+                themes=themes,
+                timeframe='today 12-m',
+                top_n=top_n
+            )
+
+        logger.info(f"已提取 {len(keywords_dict)} 個主題的關鍵字")
         return keywords_dict
 
 

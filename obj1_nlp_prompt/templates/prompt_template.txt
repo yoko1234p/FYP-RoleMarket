@@ -6,21 +6,43 @@ Character Base Description:
 Seasonal Theme:
 {theme}
 
-Trending Keywords (incorporate naturally):
+🔥 Trending Keywords (MUST INTEGRATE INTO SCENE):
 {keywords}
 
-Requirements:
-- Maintain character identity (appearance, colors, personality, features)
-- Incorporate seasonal elements from keywords naturally and creatively
-- Use Midjourney-compatible style keywords (e.g., "cute illustration style", "vibrant colors", "kawaii art")
-- Keep prompt length 50-150 words
-- Include artistic style descriptors (rendering style, lighting, mood)
-- Ensure design is suitable for merchandise (toys, stickers, clothing)
-- Character should be recognizable as {character_name}
+CRITICAL Requirements:
+1. CHARACTER DESCRIPTION (HIGHEST PRIORITY):
+   - You MUST include the COMPLETE character physical description from the base description
+   - Include ALL details: body shape, limbs, eyes, snout, ears, expression, color palette
+   - DO NOT simplify or abbreviate the character description
+   - The character description should be the LONGEST part of your prompt
+   - Character consistency is MORE important than creativity
+
+2. SCENE & COSTUME (MUST USE TRENDING KEYWORDS):
+   ⚠️ MANDATORY: You MUST incorporate at least 3-5 trending keywords into the scene/costume
+   - Blend trending keywords with seasonal theme naturally
+   - Examples of integration:
+     * If keyword is "勇士" (Warriors): Add Warriors team jersey, basketball, sports arena
+     * If keyword is "足球" (Football): Add soccer ball, stadium, football cleats
+     * If keyword is "Cyberpunk": Add neon lights, futuristic city, tech accessories
+   - Seasonal elements should COMPLEMENT the trending keywords, not replace them
+   - Include: outfit/accessories based on keywords, background scene reflecting keywords
+
+3. STYLE & MOOD:
+   - Use Midjourney-compatible style keywords (e.g., "kawaii art style", "vibrant colors", "soft lighting")
+   - Include artistic style descriptors (rendering style, lighting, mood)
+   - Ensure design is suitable for merchandise (toys, stickers, clothing)
+
+4. LENGTH & FORMAT:
+   - Target prompt length: 100-200 words (detailed character description requires more words)
+   - Single paragraph format
+   - Character name {character_name} must appear at the beginning
 
 Output Format:
 Provide ONLY the Midjourney prompt text, no explanations or additional commentary.
 The prompt should be a single paragraph suitable for direct use with Midjourney API.
 
-Example Output Style:
-"A cute pink pig character wearing [seasonal outfit], surrounded by [seasonal elements], vibrant colors, kawaii art style, soft lighting, cheerful mood, merchandise-ready design, character illustration, professional quality"
+CORRECT Example Output Style (with trending keywords integrated):
+"Lulu豬, chubby pastel piglet mascot, super-round head and torso, short stubby limbs, pill-shaped body, tiny feet and hands, soft velvet flocked surface, matte finish, no shine, very small bead-like black dot eyes, slightly downturned, tired and listless, no catchlights, small oval peach nose plate with two oval nostrils, short triangular ears, softly folded, pale pink with subtle gradient to warm pink at tips, faint blush circles, milky pastel pink skin, peach snout, soft rose blush, wearing Golden State Warriors basketball jersey with number 30, holding basketball and trophy, celebrating championship victory in Chase Center arena with cheering crowd, confetti raining, NBA championship banner in background, surrounded by teammates high-fiving, festive sports atmosphere with blue and gold team colors, kawaii art style, vibrant colors, dynamic lighting"
+
+INCORRECT Example (TOO SHORT, NO TRENDING KEYWORDS):
+"A cute pink pig character wearing Santa hat, Christmas scene, kawaii style"
