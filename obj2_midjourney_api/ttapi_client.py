@@ -95,6 +95,7 @@ class TTAPIClient:
         version: str = "6.1",
         aspect_ratio: str = "1:1",
         style: str = "raw",
+        mode: str = "relax",
         wait_for_completion: bool = True,
         save_image: bool = True,
         image_filename: Optional[str] = None
@@ -109,6 +110,7 @@ class TTAPIClient:
             version: Midjourney version (default "6.1")
             aspect_ratio: Image aspect ratio (default "1:1")
             style: Midjourney style (default "raw")
+            mode: TTAPI generation mode - "fast" (~90s), "relax" (~10min), "turbo" (~60s) (default "relax")
             wait_for_completion: Whether to wait for task to complete (default True)
             save_image: Whether to download and save the generated image
             image_filename: Custom filename for saved image (optional)
@@ -128,7 +130,8 @@ class TTAPIClient:
             >>> response = client.imagine(
             ...     prompt="Lulu Pig wearing a Halloween costume",
             ...     cref_urls=["https://example.com/lulu_ref.jpg"],
-            ...     cref_weight=100
+            ...     cref_weight=100,
+            ...     mode="relax"
             ... )
         """
         start_time = time.time()
@@ -144,9 +147,10 @@ class TTAPIClient:
 
         logger.info(f"Submitting imagine task...")
         logger.info(f"Prompt: {full_prompt[:100]}...")
+        logger.info(f"Mode: {mode}")
 
         # Submit task with retry logic
-        task_id = self._submit_with_retry(full_prompt, version)
+        task_id = self._submit_with_retry(full_prompt, version, mode)
         logger.info(f"Task submitted: {task_id}")
 
         result = {
@@ -158,15 +162,25 @@ class TTAPIClient:
         # Wait for completion if requested
         if wait_for_completion:
             task_result = self._wait_for_task(task_id)
-            result.update(task_result)
+
+            # Extract image URL from TTAPI response
+            # Response format: {"status": "SUCCESS", "data": {"cdnImage": "...", "discordImage": "...", ...}}
+            data = task_result.get('data', {})
+            image_url = data.get('cdnImage') or data.get('discordImage')
+
+            result.update({
+                'status': task_result.get('status'),
+                'image_url': image_url,
+                'data': data
+            })
 
             duration = time.time() - start_time
             result['duration'] = duration
 
             # Download image if requested
-            if save_image and result.get('image_url'):
+            if save_image and image_url:
                 local_path = self._download_image(
-                    result['image_url'],
+                    image_url,
                     task_id,
                     custom_filename=image_filename
                 )
@@ -181,13 +195,14 @@ class TTAPIClient:
 
         return result
 
-    def _submit_with_retry(self, prompt: str, version: str) -> str:
+    def _submit_with_retry(self, prompt: str, version: str, mode: str = "relax") -> str:
         """
         Submit imagine task with retry logic.
 
         Args:
             prompt: Full prompt with parameters
             version: Midjourney version
+            mode: TTAPI generation mode ("fast", "relax", "turbo")
 
         Returns:
             Task ID string
@@ -197,7 +212,8 @@ class TTAPIClient:
         """
         payload = {
             "prompt": prompt,
-            "version": version
+            "version": version,
+            "mode": mode
         }
 
         for attempt in range(self.MAX_RETRIES):
@@ -211,10 +227,12 @@ class TTAPIClient:
                 response.raise_for_status()
                 data = response.json()
 
-                if data.get('success') and data.get('task_id'):
-                    return data['task_id']
+                # TTAPI response format: {"status": "SUCCESS", "data": {"jobId": "..."}}
+                if data.get('status') == 'SUCCESS' and data.get('data', {}).get('jobId'):
+                    return data['data']['jobId']
                 else:
-                    error_msg = data.get('error', 'Unknown error')
+                    error_msg = data.get('message', 'Unknown error')
+                    logger.error(f"API response: {data}")
                     raise Exception(f"API error: {error_msg}")
 
             except requests.exceptions.RequestException as e:
@@ -242,18 +260,22 @@ class TTAPIClient:
         """
         elapsed = 0
         while elapsed < self.timeout:
-            status = self.get_task_status(task_id)
+            response = self.get_task_status(task_id)
 
-            task_status = status.get("status", "unknown").lower()
+            # TTAPI response: {"status": "ON_QUEUE|PENDING_QUEUE|SUCCESS|FAILED", "data": {...}}
+            task_status = response.get("status", "unknown")
+            logger.info(f"Task {task_id} status: {task_status} ({elapsed:.0f}s)")
 
-            if task_status == "completed":
+            if task_status == "SUCCESS":
                 logger.info(f"Task {task_id} completed")
-                return status
-            elif task_status == "failed":
-                error_msg = status.get('error', 'Unknown error')
-                raise Exception(f"Task {task_id} failed: {error_msg}")
-            elif task_status in ['pending', 'processing', 'queued']:
-                logger.info(f"Task {task_id} status: {task_status} ({elapsed:.0f}s)")
+                # Return full response including data
+                return response
+            elif task_status == "FAILED":
+                error_msg = response.get('message', 'Unknown error')
+                data = response.get('data', {})
+                error_detail = data.get('error', error_msg)
+                raise Exception(f"Task {task_id} failed: {error_detail}")
+            elif task_status in ['PENDING_QUEUE', 'ON_QUEUE']:
                 time.sleep(self.POLL_INTERVAL)
                 elapsed += self.POLL_INTERVAL
             else:
@@ -265,10 +287,10 @@ class TTAPIClient:
 
     def get_task_status(self, task_id: str) -> Dict[str, Any]:
         """
-        Get current status of a task.
+        Get current status of a task using /fetch endpoint.
 
         Args:
-            task_id: TTAPI task ID
+            task_id: TTAPI task ID (jobId)
 
         Returns:
             Status dictionary from API
@@ -277,9 +299,15 @@ class TTAPIClient:
             Exception: If status check fails
         """
         try:
-            response = requests.get(
-                f"{self.BASE_URL}/task/{task_id}",
+            # TTAPI uses POST /fetch endpoint to query task status
+            payload = {
+                "jobId": task_id
+            }
+
+            response = requests.post(
+                f"{self.BASE_URL}/fetch",
                 headers=self.headers,
+                json=payload,
                 timeout=30
             )
             response.raise_for_status()
@@ -332,6 +360,136 @@ class TTAPIClient:
 
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to download image: {e}")
+
+    def describe(
+        self,
+        image_path: str,
+        mode: str = "fast",
+        wait_for_completion: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Upload an image and generate four prompts based on the image.
+
+        Args:
+            image_path: Path to the image file
+            mode: TTAPI generation mode (default "fast")
+            wait_for_completion: Whether to wait for task to complete
+
+        Returns:
+            Dictionary containing:
+                - task_id: TTAPI task ID
+                - status: Task status
+                - prompts: List of 4 generated prompts (if completed)
+
+        Example:
+            >>> client = TTAPIClient()
+            >>> result = client.describe("data/reference_images/lulu_pig_ref_1.png")
+            >>> print(result['prompts'])
+        """
+        import base64
+        from pathlib import Path
+
+        # Read and encode image
+        image_file = Path(image_path)
+        if not image_file.exists():
+            raise FileNotFoundError(f"Image not found: {image_path}")
+
+        with open(image_file, 'rb') as f:
+            image_data = base64.b64encode(f.read()).decode('utf-8')
+
+        # Detect image format
+        file_ext = image_file.suffix.lower()
+        mime_type = 'image/png' if file_ext in ['.png'] else 'image/jpeg'
+
+        # Add data URI prefix
+        base64_string = f"data:{mime_type};base64,{image_data}"
+
+        logger.info(f"Describing image: {image_path}")
+        logger.info(f"Image size: {len(image_data)} bytes (base64)")
+
+        # Submit describe task
+        payload = {
+            "base64": base64_string,
+            "mode": mode
+        }
+
+        logger.info(f"Payload keys: {list(payload.keys())}")
+
+        try:
+            response = requests.post(
+                f"{self.BASE_URL}/describe",
+                headers=self.headers,
+                json=payload,
+                timeout=30
+            )
+
+            # Log response for debugging
+            logger.info(f"Response status: {response.status_code}")
+
+            if response.status_code != 200:
+                logger.error(f"Response body: {response.text}")
+
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get('status') == 'SUCCESS' and data.get('data', {}).get('jobId'):
+                task_id = data['data']['jobId']
+                logger.info(f"Describe task submitted: {task_id}")
+
+                result = {
+                    'task_id': task_id,
+                    'status': 'pending'
+                }
+
+                # Wait for completion if requested
+                if wait_for_completion:
+                    task_result = self._wait_for_task(task_id)
+                    result.update({
+                        'status': task_result.get('status'),
+                        'prompts': self._extract_prompts_from_describe(task_result),
+                        'data': task_result.get('data', {})
+                    })
+
+                return result
+            else:
+                error_msg = data.get('message', 'Unknown error')
+                raise Exception(f"Describe task failed: {error_msg}")
+
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to submit describe task: {e}")
+
+    def _extract_prompts_from_describe(self, task_result: Dict[str, Any]) -> List[str]:
+        """
+        Extract prompts from describe task result.
+
+        Args:
+            task_result: Task result from _wait_for_task
+
+        Returns:
+            List of generated prompts
+        """
+        data = task_result.get('data', {})
+
+        # TTAPI describe response may contain prompts in different formats
+        # Check components for button options
+        components = data.get('components', [])
+        prompts = []
+
+        if components:
+            for component in components:
+                if isinstance(component, dict):
+                    options = component.get('options', [])
+                    for option in options:
+                        if isinstance(option, dict):
+                            label = option.get('label', '')
+                            if label and label not in prompts:
+                                prompts.append(label)
+
+        # Fallback: check if prompts are directly in data
+        if not prompts and 'prompts' in data:
+            prompts = data['prompts']
+
+        return prompts
 
     def get_cost_summary(self) -> Dict[str, Any]:
         """
