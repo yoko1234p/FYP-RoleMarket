@@ -45,8 +45,8 @@ class GeminiOpenAIImageClient:
     """
 
     API_URL = "https://newapi.aisonnet.org/v1/chat/completions"
-    MODEL = "gemini-2.5-flash-image"  # 正式版
-    MODEL_PREVIEW = "gemini-2.5-flash-image-preview"  # Preview 版
+    MODEL = "gemini-3-pro-image-preview"  # 正式版
+    MODEL_PREVIEW = "gemini-3-pro-image-preview"  # Preview 版
 
     # Supported aspect ratios
     ASPECT_RATIOS = ["2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]
