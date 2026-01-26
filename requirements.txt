@@ -20,6 +20,10 @@ scikit-learn>=1.3.0
 # LLM Integration
 openai>=1.0.0  # For GPT_API_free
 
+# Google Gemini
+google-generativeai>=0.3.0  # Gemini API
+google-genai>=1.0.0  # Google GenAI SDK (for google_gemini_client.py)
+
 # Data Processing
 pandas>=2.0.0
 numpy>=1.24.0
