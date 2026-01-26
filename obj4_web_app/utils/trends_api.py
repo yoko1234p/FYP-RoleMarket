@@ -101,16 +101,9 @@ class TrendsAPIWrapper:
             'character_description': character_desc
         }
 
-        # Format keywords
-        formatted_keywords = {
-            'keywords': trend_keywords,
-            'concepts': trend_keywords,  # Simplified
-            'summary': {
-                'total_keywords': len(trend_keywords),
-                'visual_keywords': len(trend_keywords),
-                'avg_visual_score': 3.0  # Dummy score
-            }
-        }
+        # Use character_name as theme for now
+        # In future, could be extracted from keywords
+        theme = f"{character_name} design with trending elements"
 
         # Retry logic
         last_error = None
@@ -118,9 +111,11 @@ class TrendsAPIWrapper:
             try:
                 logger.info(f"Generating prompt (attempt {attempt + 1}/{max_retries})...")
 
+                # Call PromptGenerator with correct parameters
                 prompt = self.prompt_generator.generate_prompt(
-                    character_info=character_info,
-                    optimized_keywords=formatted_keywords
+                    theme=theme,
+                    keywords=trend_keywords,
+                    variation_hint=""
                 )
 
                 logger.info("✅ Prompt generated successfully")
