@@ -4,7 +4,7 @@ Step card component with three states: completed, active, pending.
 """
 
 import streamlit as st
-from typing import Callable, Optional, Literal
+from typing import Optional, Literal
 
 
 def render_step_card(
@@ -12,7 +12,7 @@ def render_step_card(
     title: str,
     state: Literal['completed', 'active', 'pending'],
     summary: Optional[str] = None,
-    on_edit: Optional[Callable] = None
+    on_edit: Optional[str] = None
 ) -> bool:
     """
     Render a step card container with appropriate styling.
