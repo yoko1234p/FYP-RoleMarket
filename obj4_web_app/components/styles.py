@@ -25,8 +25,9 @@ def inject_custom_css() -> None:
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 20px 0 30px 0;
-        margin-bottom: 20px;
+        padding: 16px 0 20px 0;
+        margin-bottom: 0;
+        background: white;
     }
 
     .stepper-step {

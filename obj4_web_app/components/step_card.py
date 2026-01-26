@@ -60,8 +60,9 @@ def render_step_card(
 
     elif state == 'active':
         # Expanded card - content rendered by caller
+        # Add id for scroll target and JavaScript to auto-scroll
         st.html(f"""
-        <div class="step-card active">
+        <div id="active-step-card" class="step-card active">
             <div class="step-card-header">
                 <span class="step-card-title">
                     <span class="icon" style="color: #1E88E5;">{icon}</span>
@@ -69,6 +70,15 @@ def render_step_card(
                 </span>
             </div>
         </div>
+        <script>
+            // Auto-scroll to active step card
+            setTimeout(function() {{
+                var el = document.getElementById('active-step-card');
+                if (el) {{
+                    el.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+                }}
+            }}, 100);
+        </script>
         """)
         return True  # Caller should render content
 
