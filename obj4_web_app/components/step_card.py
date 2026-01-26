@@ -54,7 +54,7 @@ def render_step_card(
                 """, unsafe_allow_html=True)
             with col2:
                 if on_edit:
-                    if st.button("編輯", key=f"edit_step_{step_num}", use_container_width=True):
+                    if st.button("編輯", key=on_edit, use_container_width=True):
                         return True  # Signal to go back to this step
         return False
 
