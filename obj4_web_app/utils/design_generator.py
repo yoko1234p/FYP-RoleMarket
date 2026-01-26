@@ -23,7 +23,8 @@ import threading
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from obj2_midjourney_api.google_gemini_client import GoogleGeminiImageClient
+# Lazy imports to avoid requiring google-genai when using OpenAI API
+# GoogleGeminiImageClient is only imported when use_openai_api=False
 from obj2_midjourney_api.gemini_openai_client import GeminiOpenAIImageClient
 from obj2_midjourney_api.character_focused_validator import CharacterFocusedValidator
 from obj2_midjourney_api.prompt_variation_generator import PromptVariationGenerator
@@ -65,6 +66,9 @@ class DesignGeneratorWrapper:
                 self.client = GeminiOpenAIImageClient(api_key=api_key, use_preview=True)
                 logger.info("GeminiOpenAIImageClient initialized (preview model)")
             else:
+                # Lazy import GoogleGeminiImageClient only when needed
+                # This avoids requiring google-genai package when using OpenAI API
+                from obj2_midjourney_api.google_gemini_client import GoogleGeminiImageClient
                 self.client = GoogleGeminiImageClient(api_key=api_key)
                 logger.info("GoogleGeminiImageClient initialized")
         except Exception as e:
