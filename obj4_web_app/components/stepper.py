@@ -112,7 +112,7 @@ def render_stepper(current_step: int, completed_steps: List[int]) -> None:
                 stHtml.style.zIndex = '9999';
                 stHtml.style.background = 'white';
                 stHtml.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-                stHtml.style.padding = '12px 0';
+                stHtml.style.padding = '4px 0';
                 if (placeholder) placeholder.style.display = 'block';
                 isFixed = true;
             } else if (scrollTop <= threshold && isFixed) {
