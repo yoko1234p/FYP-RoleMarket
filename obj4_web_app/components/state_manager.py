@@ -3,9 +3,24 @@
 Session state manager for step wizard.
 """
 
+import copy
 import streamlit as st
 from typing import Any, Dict, List, Optional
 from datetime import datetime
+
+# Constants
+TOTAL_STEPS = 5
+DESC_MAX_LENGTH = 50
+KEYWORD_PREVIEW_COUNT = 3
+
+# Default wizard data
+DEFAULT_WIZARD_DATA = {
+    1: {'character_name': 'Lulu Pig', 'character_desc': 'Cute pink pig with big eyes and chubby body'},
+    2: {'method': 'auto', 'extracted_trends': [], 'selected_keywords': [], 'custom_keywords': []},
+    3: {'theme': '', 'generated_prompt': ''},
+    4: {'reference_image': '', 'num_images': 2, 'variation_mode': 'single', 'generated_images': []},
+    5: {'completed_at': None}
+}
 
 
 def init_step_state() -> None:
@@ -17,13 +32,7 @@ def init_step_state() -> None:
         st.session_state['wizard_completed_steps'] = []
 
     if 'wizard_step_data' not in st.session_state:
-        st.session_state['wizard_step_data'] = {
-            1: {'character_name': 'Lulu Pig', 'character_desc': 'Cute pink pig with big eyes and chubby body'},
-            2: {'method': 'auto', 'extracted_trends': [], 'selected_keywords': [], 'custom_keywords': []},
-            3: {'theme': '', 'generated_prompt': ''},
-            4: {'reference_image': '', 'num_images': 2, 'variation_mode': 'single', 'generated_images': []},
-            5: {'completed_at': None}
-        }
+        st.session_state['wizard_step_data'] = copy.deepcopy(DEFAULT_WIZARD_DATA)
 
 
 def get_current_step() -> int:
@@ -75,7 +84,7 @@ def go_to_next_step() -> None:
     """Navigate to next step and mark current as completed."""
     current = get_current_step()
     mark_step_completed(current)
-    if current < 5:
+    if current < TOTAL_STEPS:
         set_current_step(current + 1)
 
 
@@ -96,13 +105,7 @@ def reset_wizard() -> None:
     """Reset wizard to initial state."""
     st.session_state['wizard_current_step'] = 1
     st.session_state['wizard_completed_steps'] = []
-    st.session_state['wizard_step_data'] = {
-        1: {'character_name': 'Lulu Pig', 'character_desc': 'Cute pink pig with big eyes and chubby body'},
-        2: {'method': 'auto', 'extracted_trends': [], 'selected_keywords': [], 'custom_keywords': []},
-        3: {'theme': '', 'generated_prompt': ''},
-        4: {'reference_image': '', 'num_images': 2, 'variation_mode': 'single', 'generated_images': []},
-        5: {'completed_at': None}
-    }
+    st.session_state['wizard_step_data'] = copy.deepcopy(DEFAULT_WIZARD_DATA)
 
 
 def get_step_summary(step: int) -> str:
@@ -112,16 +115,16 @@ def get_step_summary(step: int) -> str:
     if step == 1:
         name = data.get('character_name', '')
         desc = data.get('character_desc', '')
-        if desc and len(desc) > 50:
-            desc = desc[:50] + '...'
+        if desc and len(desc) > DESC_MAX_LENGTH:
+            desc = desc[:DESC_MAX_LENGTH] + '...'
         return f"{name} - {desc}" if name else ""
 
     elif step == 2:
         keywords = data.get('selected_keywords', []) + data.get('custom_keywords', [])
         count = len(keywords)
-        preview = ', '.join(keywords[:3])
-        if count > 3:
-            preview += f' (+{count - 3} more)'
+        preview = ', '.join(keywords[:KEYWORD_PREVIEW_COUNT])
+        if count > KEYWORD_PREVIEW_COUNT:
+            preview += f' (+{count - KEYWORD_PREVIEW_COUNT} more)'
         return f"{count} keywords: {preview}" if keywords else "No keywords selected"
 
     elif step == 3:
