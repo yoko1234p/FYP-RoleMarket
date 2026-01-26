@@ -48,7 +48,6 @@ from obj4_web_app.components.steps import (
 from obj4_web_app.utils.enhanced_trends_wrapper import EnhancedTrendsWrapper
 from obj4_web_app.utils.design_generator import DesignGeneratorWrapper
 from obj4_web_app.utils.firebase_manager import FirebaseManager, FirebaseError
-from obj4_web_app import config
 from obj4_web_app.config import (
     DEFAULT_REGION,
     DEFAULT_LANG,
@@ -65,9 +64,10 @@ except ImportError:
     CATEGORIES = {'all'}
 
 # Detect deployment environment
+STREAMLIT_CLOUD_HOME = '/home/appuser'
 IS_STREAMLIT_CLOUD = bool(os.getenv('STREAMLIT_RUNTIME_ENV')) or \
                      bool(os.getenv('STREAMLIT_SHARING_MODE')) or \
-                     os.getenv('HOME') == '/home/appuser'
+                     os.getenv('HOME') == STREAMLIT_CLOUD_HOME
 
 # Popular regions
 POPULAR_REGIONS = {
@@ -149,22 +149,32 @@ with st.sidebar:
 
 # Initialize API wrappers (cached)
 @st.cache_resource
-def load_enhanced_trends(backend, region):
-    return EnhancedTrendsWrapper(region=region, lang=DEFAULT_LANG, backend=backend)
+def load_enhanced_trends(backend: str, region: str) -> EnhancedTrendsWrapper | None:
+    """Load enhanced trends wrapper with specified backend and region."""
+    try:
+        return EnhancedTrendsWrapper(region=region, lang=DEFAULT_LANG, backend=backend)
+    except Exception as e:
+        st.warning(f"⚠️ Enhanced Trends unavailable: {e}")
+        return None
+
 
 @st.cache_resource
-def load_design_generator(use_openai):
+def load_design_generator(use_openai: bool) -> DesignGeneratorWrapper | None:
+    """Load design generator wrapper."""
     try:
         return DesignGeneratorWrapper(use_openai_api=use_openai)
     except Exception as e:
         st.warning(f"⚠️ Design Generator unavailable: {e}")
         return None
 
+
 @st.cache_resource
-def load_firebase_manager():
+def load_firebase_manager() -> FirebaseManager | None:
+    """Load Firebase manager for data persistence."""
     try:
         return FirebaseManager()
-    except Exception:
+    except Exception as e:
+        st.warning(f"⚠️ Firebase unavailable: {e}")
         return None
 
 
